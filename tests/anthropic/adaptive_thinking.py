@@ -1,0 +1,246 @@
+#!/usr/bin/env python3
+# ABOUTME: Tests adaptive thinking on the Anthropic first-party API with Claude Sonnet 4.6 across all effort levels
+# ABOUTME: Runs low/medium/high/max effort and reports thinking blocks, text output, and token usage
+
+import json
+import os
+import sys
+import time
+from datetime import datetime
+
+try:
+    import anthropic
+except ImportError:
+    print("Error: anthropic package not installed. Run: uv add anthropic")
+    sys.exit(1)
+
+# Add parent dirs to path so we can import load_config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from load_config import load_config, get_anthropic_client
+
+EFFORT_LEVELS = ["low", "medium", "high", "max"]
+
+PROMPT = (
+    "You are about to leave for holiday, but you forgot socks! You race back to your "
+    "room, but the power is off so you can't see sock colors. Never mind, because you "
+    "remember that in your drawer there are ten pairs of identical green socks, ten "
+    "pairs of identical black socks, and eleven pairs of identical blue socks, but they "
+    "are all mixed up. How many of your socks do you need to take before you can be "
+    "sure to have at least one pair matching in color? Give your answer as a single "
+    "number first, then explain your reasoning."
+)
+
+EXPECTED_ANSWER = 4
+
+
+def run_adaptive_thinking(client, model_id, effort_level):
+    """Run a single adaptive thinking request at the given effort level.
+
+    Returns a dict with the result details: thinking text, response text,
+    token usage, timing, and any error encountered.
+    """
+    request_params = {
+        "model": model_id,
+        "max_tokens": 8192,
+        "thinking": {
+            "type": "adaptive",
+        },
+        "output_config": {
+            "effort": effort_level,
+        },
+        "messages": [
+            {
+                "role": "user",
+                "content": PROMPT,
+            }
+        ],
+    }
+
+    result = {
+        "effort": effort_level,
+        "model_id": model_id,
+        "request_body": request_params,
+        "thinking_blocks": [],
+        "text_blocks": [],
+        "usage": {},
+        "stop_reason": None,
+        "error": None,
+        "elapsed_ms": 0,
+    }
+
+    start = time.time()
+    try:
+        response = client.messages.create(**request_params)
+        elapsed_ms = int((time.time() - start) * 1000)
+        result["elapsed_ms"] = elapsed_ms
+
+        result["usage"] = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+        if (
+            hasattr(response.usage, "cache_creation_input_tokens")
+            and response.usage.cache_creation_input_tokens
+        ):
+            result["usage"]["cache_creation_input_tokens"] = (
+                response.usage.cache_creation_input_tokens
+            )
+        if (
+            hasattr(response.usage, "cache_read_input_tokens")
+            and response.usage.cache_read_input_tokens
+        ):
+            result["usage"]["cache_read_input_tokens"] = (
+                response.usage.cache_read_input_tokens
+            )
+
+        result["stop_reason"] = response.stop_reason
+
+        for block in response.content:
+            if block.type == "thinking":
+                result["thinking_blocks"].append(block.thinking)
+            elif block.type == "text":
+                result["text_blocks"].append(block.text)
+            else:
+                # Capture any unexpected block types (e.g. redacted_thinking)
+                result["text_blocks"].append(
+                    f"[{block.type}]: {json.dumps(block.model_dump())[:300]}"
+                )
+
+    except Exception as e:
+        elapsed_ms = int((time.time() - start) * 1000)
+        result["elapsed_ms"] = elapsed_ms
+        result["error"] = str(e)
+
+    return result
+
+
+def print_result(result):
+    """Pretty-print the result of a single effort-level run."""
+    effort = result["effort"]
+    print(f"\n{'=' * 70}")
+    print(f"  EFFORT: {effort.upper()}")
+    print(f"{'=' * 70}")
+
+    print(f"\n  Model ID: {result['model_id']}")
+    print(f"\n  Request Body:")
+    print(f"  {json.dumps(result['request_body'], indent=4)}")
+
+    if result["error"]:
+        print(f"\n  STATUS: ERROR")
+        print(f"  Error:  {result['error']}")
+        print(f"  Time:   {result['elapsed_ms']}ms")
+        return
+
+    print(f"\n  STATUS: OK")
+    print(f"  Time:   {result['elapsed_ms']}ms")
+    print(f"  Stop:   {result['stop_reason']}")
+
+    usage = result["usage"]
+    input_tokens = usage.get("input_tokens", 0)
+    output_tokens = usage.get("output_tokens", 0)
+    cache_creation = usage.get("cache_creation_input_tokens", 0)
+    cache_read = usage.get("cache_read_input_tokens", 0)
+    print(f"\n  Token Usage:")
+    print(f"    Input tokens:  {input_tokens}")
+    print(f"    Output tokens: {output_tokens}")
+    if cache_creation:
+        print(f"    Cache creation: {cache_creation}")
+    if cache_read:
+        print(f"    Cache read:     {cache_read}")
+
+    # Thinking blocks
+    if result["thinking_blocks"]:
+        print(f"\n  Thinking Blocks ({len(result['thinking_blocks'])}):")
+        for i, thinking in enumerate(result["thinking_blocks"]):
+            print(f"  --- thinking block {i + 1} ({len(thinking)} chars) ---")
+            # Show full thinking, but truncate if extremely long
+            if len(thinking) > 2000:
+                print(f"  {thinking[:2000]}")
+                print(f"  ... [truncated, {len(thinking)} chars total]")
+            else:
+                print(f"  {thinking}")
+    else:
+        print(f"\n  Thinking Blocks: NONE (Claude chose not to think)")
+
+    # Text response
+    if result["text_blocks"]:
+        print(f"\n  Text Response:")
+        for i, text in enumerate(result["text_blocks"]):
+            print(f"  --- text block {i + 1} ---")
+            print(f"  {text}")
+    else:
+        print(f"\n  Text Response: NONE")
+
+
+def print_comparison(results):
+    """Print a side-by-side comparison table of all effort levels."""
+    print(f"\n{'=' * 70}")
+    print(f"  COMPARISON SUMMARY")
+    print(f"{'=' * 70}")
+    print(
+        f"  {'Effort':<10} {'Status':<10} {'Output Tok':<12} "
+        f"{'Think Chars':<14} {'Time (ms)':<12} {'Answer'}"
+    )
+    print(f"  {'-' * 10} {'-' * 10} {'-' * 12} {'-' * 14} {'-' * 12} {'-' * 10}")
+
+    for r in results:
+        status = "ERROR" if r["error"] else "OK"
+        output_tok = r["usage"].get("output_tokens", "-") if not r["error"] else "-"
+        think_chars = (
+            sum(len(t) for t in r["thinking_blocks"]) if r["thinking_blocks"] else 0
+        )
+        think_str = str(think_chars) if not r["error"] else "-"
+
+        # Check if the answer contains the expected number
+        all_text = " ".join(r["text_blocks"])
+        if r["error"]:
+            answer = "-"
+        elif str(EXPECTED_ANSWER) in all_text:
+            answer = f"correct ({EXPECTED_ANSWER})"
+        else:
+            answer = "check output"
+
+        print(
+            f"  {r['effort']:<10} {status:<10} {str(output_tok):<12} "
+            f"{think_str:<14} {r['elapsed_ms']:<12} {answer}"
+        )
+
+
+def main():
+    config = load_config()
+    model_id = config["anthropic_model_id"]
+
+    print(f"\n{'=' * 70}")
+    print(f"  ADAPTIVE THINKING TEST - Anthropic API")
+    print(f"{'=' * 70}")
+    print(f"  Time:   {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Model:  {model_id}")
+    print(f"  Effort: {', '.join(EFFORT_LEVELS)}")
+    print(f"\n  Prompt: {PROMPT[:80]}...")
+    print(f"  Expected answer: {EXPECTED_ANSWER}")
+
+    print(f"\n  Fetching API key from AWS Secrets Manager...")
+    client = get_anthropic_client(config)
+    print(f"  Client ready.")
+
+    results = []
+    for i, effort in enumerate(EFFORT_LEVELS, 1):
+        print(f"\n[{i}/{len(EFFORT_LEVELS)}] Running effort={effort}...")
+        result = run_adaptive_thinking(client, model_id, effort)
+        results.append(result)
+        print_result(result)
+
+    print_comparison(results)
+
+    # Final verdict
+    errors = [r for r in results if r["error"]]
+    successes = [r for r in results if not r["error"]]
+    print(f"\n{'=' * 70}")
+    print(f"  VERDICT: {len(successes)} succeeded, {len(errors)} errored")
+    if errors:
+        print(f"  Errored levels: {', '.join(r['effort'] for r in errors)}")
+    print(f"{'=' * 70}\n")
+
+
+if __name__ == "__main__":
+    main()

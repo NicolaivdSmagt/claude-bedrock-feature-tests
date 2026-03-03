@@ -1,0 +1,18 @@
+# ABOUTME: Centralized configuration for all standalone test scripts in this directory.
+# ABOUTME: Provides AWS region, profile, model IDs, and secrets manager settings.
+
+# AWS profile for credentials (used by boto3 session)
+aws_profile: "work"
+
+# AWS region for Bedrock API calls
+region: "eu-west-1"
+
+# Bedrock model ID (used by invoke_model / converse API)
+bedrock_model_id: "global.anthropic.claude-sonnet-4-6"
+
+# Anthropic 1st-party API model ID
+anthropic_model_id: "claude-sonnet-4-6"
+
+# AWS Secrets Manager settings for retrieving the Anthropic API key
+secrets_manager_region: "eu-west-1"
+secrets_manager_secret_name: "anthropic_api_key"

@@ -63,18 +63,6 @@ Key config fields: `aws_profile`, `region`, `bedrock_model_id`,
 
 ## Code Style Guidelines
 
-### File Header (ABOUTME comments)
-
-Every file MUST start with exactly two `# ABOUTME:` comment lines explaining what
-the file does. Test scripts include `#!/usr/bin/env python3` before ABOUTME lines.
-Support/helper scripts may omit the shebang.
-
-```python
-#!/usr/bin/env python3
-# ABOUTME: Tests adaptive thinking on Bedrock with Claude Sonnet 4.6 across all effort levels
-# ABOUTME: Runs low/medium/high/max effort and reports thinking blocks, text output, and token usage
-```
-
 ### Import Order
 
 Imports follow this order with a blank line between each group:

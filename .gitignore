@@ -36,6 +36,7 @@ env/
 # Runtime artifacts
 memories/
 reports/
+.claude/
 
 # Backup files
 *.bkp

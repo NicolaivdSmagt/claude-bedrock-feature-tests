@@ -83,6 +83,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `pdf_limits.py` | PDF count and payload size limits |
 | `1M_context_invoke.py` | 1M context window (invoke_model) |
 | `1M_context_converse.py` | 1M context window (Converse) |
+| `magic_strings.py` | Redacted thinking + streaming refusal magic string behavior |
 
 ### Anthropic API Tests (`tests/anthropic/`)
 

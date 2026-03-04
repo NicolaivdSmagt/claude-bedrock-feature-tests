@@ -83,6 +83,7 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 | `pdf_limits.py` | PDF count and payload size limits |
 | `1M_context_invoke.py` | 1M context window (invoke_model) |
 | `1M_context_converse.py` | 1M context window (Converse) |
+| `magic_strings.py` | Redacted thinking + streaming refusal magic string behavior |
 
 ### Anthropic API Tests (`tests/anthropic/`)
 

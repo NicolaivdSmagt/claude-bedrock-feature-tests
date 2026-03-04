@@ -44,9 +44,42 @@ def discover_tests(suite: str) -> list[Path]:
     return tests
 
 
-def build_prompt(suite: str, tests: list[Path], config: dict, timeout: int) -> str:
+def build_prompt(
+    suite: str, tests: list[Path], config: dict, timeout: int, verbose: bool
+) -> str:
     """Build the prompt for the Claude agent."""
     test_list = "\n".join(f"  - {t.parent.name}/{t.name}" for t in tests)
+
+    verbose_capture = ""
+    if verbose:
+        verbose_capture = (
+            "\n2. For each test, capture the FULL stdout/stderr output (do NOT truncate with tail)."
+            "\n   Save the complete output — it will be included in the report."
+        )
+    else:
+        verbose_capture = (
+            "\n2. For each test, capture:"
+            "\n   - The exit code (0 = success, non-zero = failure)"
+            "\n   - The last 30 lines of output (use `tail -30` via piping)"
+            "\n   - Whether the test passed, failed, or had an error"
+        )
+
+    verbose_section = ""
+    if verbose:
+        verbose_section = """
+
+## Raw Output
+
+For each test, include a section with the full output:
+
+### <test_name.py>
+
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+<full stdout/stderr output>
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+
+(Repeat for each test)
+"""
 
     return f"""You are a test runner. Your job is to execute Python test scripts and produce a structured markdown report.
 
@@ -64,11 +97,7 @@ def build_prompt(suite: str, tests: list[Path], config: dict, timeout: int) -> s
 
 1. Run each test script listed above using: `AWS_PROFILE={config.get("aws_profile", "default")} timeout {timeout} uv run python <script_path>`
    Run them from the working directory: {Path(__file__).parent}
-
-2. For each test, capture:
-   - The exit code (0 = success, non-zero = failure)
-   - The last 30 lines of output (use `tail -30` via piping)
-   - Whether the test passed, failed, or had an error
+{verbose_capture}
 
 3. Classify each test result as one of:
    - **PASS**: Exit code 0 and output indicates success (look for "PASS", "SUCCESS", "PASSED", correct results, or no errors)
@@ -106,7 +135,7 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 | FAIL (expected) | N |
 | ERROR | N |
 | **Total** | **N** |
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+{verbose_section}See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 
 IMPORTANT RULES:
 - Run ALL {len(tests)} tests. Do not skip any.
@@ -169,10 +198,17 @@ def main():
         help="Timeout in seconds per test (default: 300)",
     )
     parser.add_argument(
+        "-o",
         "--output",
         type=str,
         default=None,
-        help="Output file for the markdown report (default: reports/report_<timestamp>.md)",
+        help="Save report to file (default: screen only). Use 'auto' for auto-generated filename.",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Include full raw output from each test in the report",
     )
     args = parser.parse_args()
 
@@ -190,7 +226,7 @@ def main():
     print()
 
     cwd = str(Path(__file__).parent)
-    prompt = build_prompt(args.suite, tests, config, args.timeout)
+    prompt = build_prompt(args.suite, tests, config, args.timeout, args.verbose)
 
     print("Starting Claude agent to run tests...")
     print("=" * 60)
@@ -198,24 +234,25 @@ def main():
     result_text = asyncio.run(run_agent(prompt, cwd))
     report = extract_markdown_report(result_text)
 
-    # Ensure reports directory exists
-    reports_dir = Path(__file__).parent / "reports"
-    reports_dir.mkdir(exist_ok=True)
-
-    # Determine output path
-    if args.output:
-        output_path = Path(args.output)
-    else:
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        model_slug = config["bedrock_model_id"].replace(".", "_").replace(":", "_")
-        output_path = (
-            reports_dir / f"report_{model_slug}_{config['region']}_{timestamp}.md"
-        )
-
-    output_path.write_text(report)
     print()
     print("=" * 60)
-    print(f"Report written to: {output_path}")
+
+    # Save to file only if -o was specified
+    if args.output:
+        if args.output == "auto":
+            reports_dir = Path(__file__).parent / "reports"
+            reports_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            model_slug = config["bedrock_model_id"].replace(".", "_").replace(":", "_")
+            output_path = (
+                reports_dir / f"report_{model_slug}_{config['region']}_{timestamp}.md"
+            )
+        else:
+            output_path = Path(args.output)
+
+        output_path.write_text(report)
+        print(f"Report written to: {output_path}")
+
     print()
     print(report)
 

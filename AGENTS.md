@@ -32,6 +32,9 @@ uv run python run_tests.py --suite bedrock               # Run all Bedrock tests
 uv run python run_tests.py --suite anthropic              # Anthropic API tests
 uv run python run_tests.py --suite all                    # All tests
 uv run python run_tests.py --timeout 600                  # Custom timeout per test
+uv run python run_tests.py -v                             # Include full test output
+uv run python run_tests.py -o auto                        # Save report to reports/
+uv run python run_tests.py -o results.md                  # Save report to specific file
 ```
 
 ### Run a single test

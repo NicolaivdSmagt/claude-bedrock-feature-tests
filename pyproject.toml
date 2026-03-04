@@ -8,5 +8,6 @@ dependencies = [
     "anthropic>=0.74.1",
     "boto3>=1.41.1",
     "claude-code-sdk>=0.0.25",
+    "pillow>=12.1.1",
     "pyyaml>=6.0.3",
 ]

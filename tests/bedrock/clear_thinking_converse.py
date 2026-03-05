@@ -42,6 +42,43 @@ from load_config import load_config, get_bedrock_client
 CONTEXT_MGMT_BETA = "context-management-2025-06-27"
 
 
+def run_conversation(client, model_id, prompts, context_management=None):
+    """Run a multi-turn thinking conversation. Returns list of (turn, input_tokens, thinking_seen)."""
+    messages = []
+    results = []
+
+    additional_fields = {
+        "thinking": {"type": "enabled", "budget_tokens": 1024},
+    }
+    if context_management:
+        additional_fields["anthropic_beta"] = [CONTEXT_MGMT_BETA]
+        additional_fields["context_management"] = context_management
+
+    for turn, prompt in enumerate(prompts, 1):
+        messages.append({"role": "user", "content": [{"text": prompt}]})
+
+        response = client.converse(
+            modelId=model_id,
+            messages=messages,
+            additionalModelRequestFields=additional_fields,
+        )
+
+        output_message = response.get("output", {}).get("message", {})
+        content = output_message.get("content", [])
+        usage = response.get("usage", {})
+
+        messages.append({"role": "assistant", "content": content})
+
+        input_tokens = usage.get("inputTokens", 0)
+        thinking_seen = any(
+            isinstance(b, dict) and "reasoningContent" in b for b in content
+        )
+
+        results.append((turn, input_tokens, thinking_seen))
+
+    return results
+
+
 def test_clear_thinking(client, model_id):
     """Test that context management clears old thinking blocks. Returns (status, error_msg)."""
     print("=" * 70)
@@ -63,77 +100,26 @@ def test_clear_thinking(client, model_id):
         "If I share them equally with a friend, how many do we each get? Show your work.",
     ]
 
-    messages = []
-    total_cleared_turns = 0
-    total_saved_tokens = 0
-    thinking_seen = False
-
     print(f"\n  Context management config:")
     print(f"    keep: 1 thinking turn")
 
+    # The Converse API does not return a context_management field in
+    # responses, so we verify clearing by comparing input token counts
+    # between a run WITH clearing and a run WITHOUT clearing. If clearing
+    # works, later turns should use fewer input tokens.
+
     try:
-        for turn, prompt in enumerate(user_prompts, 1):
-            print(f"\n--- Turn {turn}: {prompt[:60]} ---")
+        print("\n--- Run 1: WITH clear_thinking ---")
+        with_clearing = run_conversation(
+            client, model_id, user_prompts, context_management
+        )
+        for turn, tokens, thinking in with_clearing:
+            print(f"  Turn {turn}: inputTokens={tokens}, thinking={thinking}")
 
-            messages.append({"role": "user", "content": [{"text": prompt}]})
-
-            response = client.converse(
-                modelId=model_id,
-                messages=messages,
-                additionalModelRequestFields={
-                    "thinking": {"type": "enabled", "budget_tokens": 1024},
-                    "anthropic_beta": [CONTEXT_MGMT_BETA],
-                    "context_management": context_management,
-                },
-            )
-
-            output_message = response.get("output", {}).get("message", {})
-            content = output_message.get("content", [])
-            usage = response.get("usage", {})
-            additional = response.get("additionalModelResponseFields") or {}
-            context_mgmt = additional.get("context_management")
-
-            messages.append({"role": "assistant", "content": content})
-
-            print(f"  Input tokens:  {usage.get('inputTokens', 0)}")
-            print(f"  Output tokens: {usage.get('outputTokens', 0)}")
-
-            # Check for thinking blocks (Converse wraps them differently)
-            for block in content:
-                if isinstance(block, dict):
-                    # Converse may return thinking in various formats
-                    if "reasoningContent" in block:
-                        thinking_seen = True
-                        reasoning = block["reasoningContent"]
-                        if "reasoningText" in reasoning:
-                            text = reasoning["reasoningText"].get("text", "")
-                            preview = text[:100].replace("\n", " ")
-                            print(f"  Thinking: {preview}...")
-                    elif block.get("type") == "thinking":
-                        thinking_seen = True
-                        preview = block.get("thinking", "")[:100].replace("\n", " ")
-                        print(f"  Thinking: {preview}...")
-
-            # Check for text response
-            for block in content:
-                if isinstance(block, dict) and "text" in block:
-                    print(f"  Response: {block['text'][:150]}")
-                    break
-
-            # Check context management clearing
-            if context_mgmt:
-                print(f"  context_management: {json.dumps(context_mgmt)}")
-                edits = context_mgmt.get("applied_edits", [])
-                for edit in edits:
-                    if edit.get("type") == "clear_thinking_20251015":
-                        cleared = edit.get("cleared_thinking_turns", 0)
-                        saved = edit.get("cleared_input_tokens", 0)
-                        if cleared > 0:
-                            total_cleared_turns += cleared
-                            total_saved_tokens += saved
-                            print(
-                                f"  Cleared {cleared} thinking turn(s), saved {saved} tokens"
-                            )
+        print("\n--- Run 2: WITHOUT clear_thinking (baseline) ---")
+        without_clearing = run_conversation(client, model_id, user_prompts)
+        for turn, tokens, thinking in without_clearing:
+            print(f"  Turn {turn}: inputTokens={tokens}, thinking={thinking}")
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {e}"
@@ -141,28 +127,34 @@ def test_clear_thinking(client, model_id):
         print(f"  {error_msg}")
         return ("ERROR", error_msg)
 
-    print(f"\n  Thinking blocks seen:     {thinking_seen}")
-    print(f"  Total thinking cleared:   {total_cleared_turns}")
-    print(f"  Total tokens saved:       {total_saved_tokens}")
-
-    if not thinking_seen:
+    # Check that thinking blocks were produced
+    any_thinking = any(thinking for _, _, thinking in with_clearing)
+    if not any_thinking:
         msg = "No thinking blocks were produced"
         print(f"\n  Result: FAIL - {msg}")
         return ("FAIL", msg)
 
-    # The Converse API accepts the context_management parameter without error
-    # but does not return the context_management field in responses, so we
-    # cannot directly verify clearing happened. We validate that thinking
-    # works and the config is accepted. If clearing stats are available, we
-    # check them; otherwise PASS based on thinking + successful completion.
-    if total_cleared_turns > 0:
-        print(
-            f"\n  Result: PASS - cleared {total_cleared_turns} thinking turn(s), saved {total_saved_tokens} tokens"
-        )
-    else:
-        print(
-            f"\n  Result: PASS - thinking works, context_management config accepted (clearing stats not returned by Converse API)"
-        )
+    # Compare token counts on turns 2+ (turn 1 has nothing to clear)
+    print("\n  Token comparison (turn 2+):")
+    total_saved = 0
+    clearing_observed = False
+    for (turn_w, tokens_w, _), (turn_b, tokens_b, _) in zip(
+        with_clearing[1:], without_clearing[1:]
+    ):
+        saved = tokens_b - tokens_w
+        total_saved += saved
+        print(f"    Turn {turn_w}: with={tokens_w}, without={tokens_b}, saved={saved}")
+        if saved > 0:
+            clearing_observed = True
+
+    if not clearing_observed:
+        msg = "No token savings observed from clearing (with-clearing tokens >= without-clearing tokens)"
+        print(f"\n  Result: FAIL - {msg}")
+        return ("FAIL", msg)
+
+    print(
+        f"\n  Result: PASS - clearing reduced input tokens by {total_saved} across turns 2+"
+    )
     return ("PASS", None)
 
 

@@ -65,7 +65,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `text_editor_converse.py` | Text editor tool (Converse) |
 | `caching_min_prefix.py` | Minimum prefix size for prompt caching (~2048 tokens) |
 | `cache_with_structured_outputs.py` | Caching interaction with structured JSON output |
-| `extended_cache_ttl.py` | Extended 1-hour cache TTL |
+| `extended_cache_ttl_invoke.py` | Extended 1-hour cache TTL (invoke_model) |
+| `extended_cache_ttl_converse.py` | Extended 1-hour cache TTL (Converse) |
 | `structured_outputs_invoke.py` | JSON schema output + strict tool use (invoke_model) |
 | `structured_outputs_converse.py` | JSON schema output + strict tool use (Converse) |
 | `count_tokens.py` | count_tokens API |
@@ -82,7 +83,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `compaction_converse.py` | Message compaction (Converse) |
 | `mcp_connector_invoke.py` | MCP connector: remote MCP server connection (invoke_model) |
 | `mcp_connector_converse.py` | MCP connector: remote MCP server connection (Converse) |
-| `memory_test.py` | Memory tool (create + retrieve across sessions) |
+| `memory_test_invoke.py` | Memory tool: create + retrieve across sessions (invoke_model) |
+| `memory_test_converse.py` | Memory tool: create + retrieve across sessions (Converse) |
 | `image_limit_invoke.py` | Image count limit per request (invoke_model) |
 | `image_limit_converse.py` | Image count limit per request (Converse) |
 | `image_size_limit_invoke.py` | Maximum image size, single + multi (invoke_model) |

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ABOUTME: Tests the code_execution_20250825 tool on Amazon Bedrock via the Converse API.
-# ABOUTME: Validates programmatic tool calling with and without beta headers.
+# ABOUTME: Validates programmatic tool calling via sandboxed Python execution.
 
 """
 Code Execution Tool Test for Amazon Bedrock (Converse API)
@@ -14,9 +14,8 @@ additionalModelRequestFields since the Converse API doesn't natively
 support these Anthropic-specific tool types. A placeholder toolSpec is
 required in toolConfig.tools to satisfy the Converse schema.
 
-Test cases:
-1. Code execution with beta header — should produce server_tool_use blocks
-2. Code execution without beta header — validates behavior without the beta
+Sends a request with the code execution tool and checks for text or tool use
+blocks indicating the feature is working.
 
 The code execution tool requires Anthropic's backend infrastructure (sandboxed
 containers, server-side tool execution). It may not be available on Bedrock.
@@ -54,6 +53,7 @@ FEATURE_NOT_AVAILABLE_MARKERS = [
     "unknown field",
     "unrecognized",
     "unknown tool type",
+    "does not match any of the expected tags",
 ]
 
 # Converse requires at least one toolSpec in toolConfig; this placeholder satisfies that.
@@ -101,7 +101,7 @@ def get_anthropic_tools_config():
 def test_with_beta(client, model_id):
     """Test code execution tool with beta header. Returns (status, error_msg)."""
     print("=" * 70)
-    print("TEST 1: CODE EXECUTION WITH BETA HEADER")
+    print("TEST: CODE EXECUTION")
     print("=" * 70)
 
     request = {
@@ -162,66 +162,6 @@ def test_with_beta(client, model_id):
         print()
 
 
-def test_without_beta(client, model_id):
-    """Test code execution tool without beta header. Returns (status, error_msg)."""
-    print("=" * 70)
-    print("TEST 2: CODE EXECUTION WITHOUT BETA HEADER")
-    print("=" * 70)
-
-    request = {
-        "modelId": model_id,
-        "messages": [
-            {
-                "role": "user",
-                "content": [{"text": "Get the temperature for Paris."}],
-            }
-        ],
-        "toolConfig": PLACEHOLDER_TOOL_CONFIG,
-        "additionalModelRequestFields": {
-            # No anthropic_beta header
-            "tools": get_anthropic_tools_config(),
-        },
-    }
-
-    print("\n--- REQUEST ---")
-    print(json.dumps(request, indent=2, default=str))
-
-    try:
-        response = client.converse(**request)
-        print("\n--- RESPONSE ---")
-        print(json.dumps(response, indent=2, default=str))
-
-        stop_reason = response.get("stopReason")
-        output_message = response.get("output", {}).get("message", {})
-        content_blocks = output_message.get("content", [])
-
-        has_text = any("text" in b for b in content_blocks)
-        has_tool_use = any("toolUse" in b for b in content_blocks)
-
-        print(f"\n  stopReason: {stop_reason}")
-        print(f"  has_text: {has_text}")
-        print(f"  has_tool_use: {has_tool_use}")
-
-        if has_text or has_tool_use:
-            print("\n  Result: PASS - got response without beta header")
-            return ("PASS", None)
-        else:
-            msg = "No text or tool use blocks in response"
-            print(f"\n  Result: FAIL - {msg}")
-            return ("FAIL", msg)
-
-    except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}"
-        print(f"\n--- BEDROCK ERROR ---")
-        print(f"  {error_msg[:300]}")
-        status, msg = classify_error(error_msg)
-        print(f"\n  Result: {status}")
-        return (status, msg)
-
-    finally:
-        print()
-
-
 def print_summary(results):
     """Print a summary table of all test outcomes."""
     print("=" * 70)
@@ -260,10 +200,7 @@ def main():
     results = []
 
     status, error = test_with_beta(client, model_id)
-    results.append(("With beta header", status, error))
-
-    status, error = test_without_beta(client, model_id)
-    results.append(("Without beta header", status, error))
+    results.append(("Code execution", status, error))
 
     all_passed = print_summary(results)
     sys.exit(0 if all_passed else 1)

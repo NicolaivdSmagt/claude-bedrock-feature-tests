@@ -66,7 +66,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `caching_min_prefix.py` | Minimum prefix size for prompt caching (~2048 tokens) |
 | `cache_with_structured_outputs.py` | Caching interaction with structured JSON output |
 | `extended_cache_ttl.py` | Extended 1-hour cache TTL |
-| `structured_outputs.py` | JSON schema output + strict tool use |
+| `structured_outputs_invoke.py` | JSON schema output + strict tool use (invoke_model) |
+| `structured_outputs_converse.py` | JSON schema output + strict tool use (Converse) |
 | `count_tokens.py` | count_tokens API |
 | `code_execution_invoke.py` | Code execution tool (invoke_model) |
 | `code_execution_converse.py` | Code execution tool (Converse) |

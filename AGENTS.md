@@ -129,6 +129,41 @@ fields, JSON dumps for request/response bodies, PASS/FAIL verdicts, and summary
 comparison tables. Test functions return either `(bool, str, Optional[dict])` or
 `dict` with structured result fields (`error`, `usage`, `elapsed_ms`, etc.).
 
+### PASS/FAIL Summary Table
+
+Every test script must print a summary table at the end and exit with code 0
+only when all tests pass. Each test function returns `(status, error_msg)`
+where status is `"PASS"`, `"FAIL"`, or `"ERROR"` and error_msg is `None` on
+success or a descriptive string otherwise. `main()` collects these into a
+results list and calls a `print_summary()` function:
+
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+def print_summary(results):
+    print("=" * 70)
+    print("  SUMMARY")
+    print("=" * 70)
+    name_width = max(len(name) for name, _, _ in results)
+    for name, status, error in results:
+        line = f"  {name:<{name_width}}  {status}"
+        if error:
+            line += f"  {error}"
+        print(line)
+    passes = sum(1 for _, s, _ in results if s == "PASS")
+    fails = sum(1 for _, s, _ in results if s == "FAIL")
+    errors = sum(1 for _, s, _ in results if s == "ERROR")
+    print(f"\n  Results: {passes} PASS, {fails} FAIL, {errors} ERROR")
+    print("=" * 70)
+    return all(s == "PASS" for _, s, _ in results)
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+
+### Multi-Test Scripts
+
+When a script covers multiple related features (e.g. regex search, BM25
+search, custom search), put each in its own `test_*()` function that accepts
+`(client, model_id)` and returns `(status, error_msg)`. `main()` calls them
+sequentially, collects results with descriptive labels, and delegates to
+`print_summary()`.
+
 ### No Mock Mode
 
 All tests make real API calls. Never implement mock modes or fake responses.

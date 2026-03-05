@@ -38,73 +38,35 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from load_config import load_config, get_bedrock_client
 
 
-def create_large_system_content():
-    """Create system content large enough to be cached (min 2048 tokens for caching threshold)."""
-    base_text = """You are an expert assistant specializing in software development.
+CONVERSATION_FILE = os.path.join(
+    os.path.dirname(__file__), "..", "..", "files", "50000_token_conversation.json"
+)
 
-Here is extensive background knowledge you should use when answering questions:
 
-# Software Engineering Principles
+def load_system_content():
+    """Load system content from the 50K-token conversation file.
 
-## SOLID Principles
-1. Single Responsibility Principle (SRP): A class should have only one reason to change. This means that a class should only have one job.
-2. Open/Closed Principle (OCP): Software entities should be open for extension but closed for modification. This is typically achieved through abstraction and polymorphism.
-3. Liskov Substitution Principle (LSP): Objects of a superclass should be replaceable with objects of subclasses without affecting the correctness of the program.
-4. Interface Segregation Principle (ISP): Many client-specific interfaces are better than one general-purpose interface. Clients should not be forced to depend on methods they do not use.
-5. Dependency Inversion Principle (DIP): Depend upon abstractions, not concretions. High-level modules should not depend on low-level modules. Both should depend on abstractions.
+    Combines the system prompt, tools definitions, and a portion of the
+    conversation history from the file to produce content well above the
+    2048-token caching threshold.
+    """
+    with open(CONVERSATION_FILE, "r") as f:
+        data = json.load(f)
 
-## Design Patterns
+    system_text = data["system"]
+    tools_text = json.dumps(data["tools"], indent=2)
+    # Include first 8 messages as reference context to exceed the caching threshold
+    messages_text = json.dumps(data["messages"][:8], indent=2)
 
-### Creational Patterns
-- Singleton: Ensures a class has only one instance and provides a global point of access to it.
-- Factory Method: Defines an interface for creating an object but lets subclasses decide which class to instantiate.
-- Abstract Factory: Provides an interface for creating families of related or dependent objects without specifying their concrete classes.
-- Builder: Separates the construction of a complex object from its representation.
-- Prototype: Creates new objects by copying an existing object, known as the prototype.
-
-### Structural Patterns
-- Adapter: Converts the interface of a class into another interface clients expect.
-- Bridge: Decouples an abstraction from its implementation so that the two can vary independently.
-- Composite: Composes objects into tree structures to represent part-whole hierarchies.
-- Decorator: Attaches additional responsibilities to an object dynamically.
-- Facade: Provides a unified interface to a set of interfaces in a subsystem.
-- Flyweight: Uses sharing to support large numbers of fine-grained objects efficiently.
-- Proxy: Provides a surrogate or placeholder for another object to control access to it.
-
-### Behavioral Patterns
-- Chain of Responsibility: Passes a request along a chain of handlers.
-- Command: Encapsulates a request as an object.
-- Iterator: Provides a way to access the elements of an aggregate object sequentially.
-- Mediator: Defines an object that encapsulates how a set of objects interact.
-- Memento: Captures and externalizes an object's internal state.
-- Observer: Defines a one-to-many dependency between objects.
-- State: Allows an object to alter its behavior when its internal state changes.
-- Strategy: Defines a family of algorithms, encapsulates each one, and makes them interchangeable.
-- Template Method: Defines the skeleton of an algorithm in an operation.
-- Visitor: Represents an operation to be performed on the elements of an object structure.
-
-## Clean Code Practices
-- Meaningful names for variables, functions, and classes
-- Functions should be small and do one thing
-- Comments should explain why, not what
-- Error handling should be clean and predictable
-- DRY (Don't Repeat Yourself)
-- KISS (Keep It Simple, Stupid)
-- YAGNI (You Aren't Gonna Need It)
-
-## Testing Best Practices
-- TDD: Red-Green-Refactor cycle
-- Unit Tests: Test individual components in isolation
-- Integration Tests: Test interaction between components
-- End-to-End Tests: Test the entire system from the user's perspective
-
-## Distributed Systems
-- CAP Theorem: Consistency, Availability, Partition tolerance
-- Consensus Algorithms: Paxos, Raft, PBFT
-- Event Sourcing and CQRS
-
-"""
-    return base_text
+    return (
+        f"{system_text}\n\n"
+        f"# Available Tools Reference\n\n"
+        f"The following tool definitions are available in this session:\n\n"
+        f"{tools_text}\n\n"
+        f"# Conversation Context\n\n"
+        f"Here is relevant prior conversation context for reference:\n\n"
+        f"{messages_text}"
+    )
 
 
 def test_extended_cache_ttl(client, model_id):
@@ -113,7 +75,7 @@ def test_extended_cache_ttl(client, model_id):
     print("TEST: EXTENDED CACHE TTL (1h)")
     print("=" * 70)
 
-    system_content = create_large_system_content()
+    system_content = load_system_content()
 
     # Converse API uses cachePoint as a separate system content block
     system = [

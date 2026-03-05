@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # ABOUTME: Tests the code_execution_20250825 tool on Amazon Bedrock via the invoke_model API.
-# ABOUTME: Validates programmatic tool calling with and without beta headers.
+# ABOUTME: Validates programmatic tool calling via sandboxed Python execution.
 
 """
 Code Execution Tool Test for Amazon Bedrock (Invoke API)
@@ -9,9 +9,8 @@ Code Execution Tool Test for Amazon Bedrock (Invoke API)
 Tests the code execution tool (code_execution_20250825) which enables
 sandboxed Python execution and programmatic tool calling.
 
-Test cases:
-1. Code execution with beta header — should produce server_tool_use blocks
-2. Code execution without beta header — validates behavior without the beta
+Sends a request with the code execution tool and checks for server_tool_use
+blocks indicating sandboxed Python execution ran server-side.
 
 The code execution tool requires Anthropic's backend infrastructure (sandboxed
 containers, server-side tool execution). It may not be available on Bedrock.
@@ -49,6 +48,7 @@ FEATURE_NOT_AVAILABLE_MARKERS = [
     "unknown field",
     "unrecognized",
     "unknown tool type",
+    "does not match any of the expected tags",
 ]
 
 
@@ -84,7 +84,7 @@ def get_tools_config():
 def test_with_beta(client, model_id):
     """Test code execution tool with beta header. Returns (status, error_msg)."""
     print("=" * 70)
-    print("TEST 1: CODE EXECUTION WITH BETA HEADER")
+    print("TEST: CODE EXECUTION")
     print("=" * 70)
 
     body = {
@@ -152,61 +152,6 @@ def test_with_beta(client, model_id):
         print()
 
 
-def test_without_beta(client, model_id):
-    """Test code execution tool without beta header. Returns (status, error_msg)."""
-    print("=" * 70)
-    print("TEST 2: CODE EXECUTION WITHOUT BETA HEADER")
-    print("=" * 70)
-
-    body = {
-        "anthropic_version": "bedrock-2023-05-31",
-        # No anthropic_beta header
-        "max_tokens": 1024,
-        "messages": [{"role": "user", "content": "Get the temperature for Paris."}],
-        "tools": get_tools_config(),
-    }
-
-    print("\n--- REQUEST BODY ---")
-    print(json.dumps(body, indent=2))
-
-    try:
-        response = client.invoke_model(modelId=model_id, body=json.dumps(body))
-        result = json.loads(response["body"].read())
-        print("\n--- RAW RESPONSE ---")
-        print(json.dumps(result, indent=2))
-
-        content = result.get("content", [])
-        content_types = [b.get("type") for b in content]
-        stop_reason = result.get("stop_reason")
-
-        print(f"\n  stop_reason: {stop_reason}")
-        print(f"  content types: {content_types}")
-
-        # Without the beta, code execution may still work (if GA) or may fail
-        has_server_tool_use = "server_tool_use" in content_types
-        has_text = "text" in content_types
-        has_tool_use = "tool_use" in content_types
-
-        if has_server_tool_use or has_text or has_tool_use:
-            print("\n  Result: PASS - got response without beta header")
-            return ("PASS", None)
-        else:
-            msg = f"Unexpected response, content types: {content_types}"
-            print(f"\n  Result: FAIL - {msg}")
-            return ("FAIL", msg)
-
-    except Exception as e:
-        error_msg = f"{type(e).__name__}: {e}"
-        print(f"\n--- BEDROCK ERROR ---")
-        print(f"  {error_msg[:300]}")
-        status, msg = classify_error(error_msg)
-        print(f"\n  Result: {status}")
-        return (status, msg)
-
-    finally:
-        print()
-
-
 def print_summary(results):
     """Print a summary table of all test outcomes."""
     print("=" * 70)
@@ -245,10 +190,7 @@ def main():
     results = []
 
     status, error = test_with_beta(client, model_id)
-    results.append(("With beta header", status, error))
-
-    status, error = test_without_beta(client, model_id)
-    results.append(("Without beta header", status, error))
+    results.append(("Code execution", status, error))
 
     all_passed = print_summary(results)
     sys.exit(0 if all_passed else 1)

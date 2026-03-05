@@ -68,7 +68,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `extended_cache_ttl.py` | Extended 1-hour cache TTL |
 | `structured_outputs.py` | JSON schema output + strict tool use |
 | `count_tokens.py` | count_tokens API |
-| `code_execution.py` | Code execution tool (expected to fail on Bedrock) |
+| `code_execution_invoke.py` | Code execution tool (invoke_model) |
+| `code_execution_converse.py` | Code execution tool (Converse) |
 | `tool_search_invoke.py` | Tool search: regex, BM25, custom client-side (invoke_model) |
 | `tool_search_converse.py` | Tool search: regex, BM25, custom client-side (Converse) |
 | `web_search_invoke.py` | Web search (invoke_model) |

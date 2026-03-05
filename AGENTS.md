@@ -2,10 +2,10 @@
 
 ## Project Overview
 
-Standalone Python test scripts for validating Claude API features on Amazon Bedrock
-and the Anthropic 1st-party API. Each test script is self-contained and makes real
-API calls. An automated test runner (powered by the Claude Agent SDK) can execute
-all tests and produce a markdown report.
+Standalone Python test scripts for validating Claude API features and parity
+between Amazon Bedrock and the Anthropic 1st-party API. Each test script is
+self-contained and makes real API calls. An automated test runner (powered by
+the Claude Agent SDK) can execute all tests and produce a markdown report.
 
 ## Directory Structure
 
@@ -170,7 +170,7 @@ All tests make real API calls. Never implement mock modes or fake responses.
 
 ### Invoke / Converse Pairs
 
-Every Bedrock test must have both an `_invoke.py` and `_converse.py` variant:
+Most Bedrock tests must have both an `_invoke.py` and `_converse.py` variant:
 
 - **Invoke** (`client.invoke_model()`) uses the Anthropic-native JSON body
   format: `stop_reason`, `cache_control`, `tool_use` / `tool_result` content
@@ -179,6 +179,9 @@ Every Bedrock test must have both an `_invoke.py` and `_converse.py` variant:
   `stopReason`, `toolUse` / `toolResult`, content as `[{"text": "..."}]`,
   and Anthropic-specific features passed via `additionalModelRequestFields`.
 
+Certain tests (such as magic_strings.py) test functionality that is API agnostic.
+Those do not require separate variants for Converse and invoke_model APIs.
+ 
 ### Converse API Patterns
 
 The Converse API has several structural differences from invoke_model:

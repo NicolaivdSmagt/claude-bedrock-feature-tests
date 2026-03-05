@@ -76,9 +76,12 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 | `tool_search_converse.py` | Tool search: regex, BM25, custom client-side (Converse) |
 | `web_search_invoke.py` | Web search (invoke_model) |
 | `web_search_converse.py` | Web search (Converse) |
-| `parallel_tool_use.py` | Parallel tool calls in a single response |
-| `clear_thinking_test.py` | Clear old thinking blocks to save tokens |
-| `clear_tool_use_test.py` | Clear old tool use/result pairs |
+| `parallel_tool_use_invoke.py` | Parallel tool calls in a single response (invoke_model) |
+| `parallel_tool_use_converse.py` | Parallel tool calls in a single response (Converse) |
+| `clear_thinking_invoke.py` | Clear old thinking blocks to save tokens (invoke_model) |
+| `clear_thinking_converse.py` | Clear old thinking blocks to save tokens (Converse) |
+| `clear_tool_use_invoke.py` | Clear old tool use/result pairs (invoke_model) |
+| `clear_tool_use_converse.py` | Clear old tool use/result pairs (Converse) |
 | `compaction_invoke.py` | Message compaction (invoke_model) |
 | `compaction_converse.py` | Message compaction (Converse) |
 | `mcp_connector_invoke.py` | MCP connector: remote MCP server connection (invoke_model) |

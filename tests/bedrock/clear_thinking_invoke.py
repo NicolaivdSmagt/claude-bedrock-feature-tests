@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+# ABOUTME: Tests context management clear_thinking on Amazon Bedrock via the invoke_model API.
+# ABOUTME: Verifies that old thinking blocks are automatically cleared to save tokens.
+
+"""
+Clear Thinking Test for Amazon Bedrock (Invoke API)
+=====================================================
+
+Tests the clear_thinking_20251015 context management edit via
+invoke_model. Runs a multi-turn conversation with extended thinking
+enabled, configured to keep only the most recent thinking turn.
+
+Validates that:
+1. Extended thinking works (thinking blocks appear in responses)
+2. Context management clears old thinking turns when the threshold is reached
+3. The conversation continues to work after clearing
+
+Requirements:
+    uv add boto3
+
+Usage:
+    uv run python tests/bedrock/clear_thinking_invoke.py
+"""
+
+import json
+import os
+import sys
+
+try:
+    import boto3
+except ImportError:
+    print("Error: boto3 package not installed. Run: uv add boto3")
+    sys.exit(1)
+
+# Add parent dirs to path so we can import load_config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+from load_config import load_config, get_bedrock_client
+
+CONTEXT_MGMT_BETA = "context-management-2025-06-27"
+
+
+def test_clear_thinking(client, model_id):
+    """Test that context management clears old thinking blocks. Returns (status, error_msg)."""
+    print("=" * 70)
+    print("TEST: CLEAR THINKING (clear_thinking_20251015)")
+    print("=" * 70)
+
+    context_management = {
+        "edits": [
+            {
+                "type": "clear_thinking_20251015",
+                "keep": {"type": "thinking_turns", "value": 1},
+            }
+        ]
+    }
+
+    user_prompts = [
+        "If I have 3 apples and eat one, how many do I have? Explain the logic.",
+        "Now I buy 5 more. How many do I have total? Double check your math.",
+        "If I share them equally with a friend, how many do we each get? Show your work.",
+    ]
+
+    messages = []
+    total_cleared_turns = 0
+    total_saved_tokens = 0
+    thinking_seen = False
+
+    print(f"\n  Context management config:")
+    print(f"    keep: 1 thinking turn")
+
+    try:
+        for turn, prompt in enumerate(user_prompts, 1):
+            print(f"\n--- Turn {turn}: {prompt[:60]} ---")
+
+            messages.append({"role": "user", "content": prompt})
+
+            body = {
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 4096,
+                "messages": messages,
+                "thinking": {"type": "enabled", "budget_tokens": 1024},
+                "anthropic_beta": [CONTEXT_MGMT_BETA],
+                "context_management": context_management,
+            }
+
+            response = client.invoke_model(modelId=model_id, body=json.dumps(body))
+            result = json.loads(response["body"].read())
+
+            content_blocks = result.get("content", [])
+            usage = result.get("usage", {})
+            context_mgmt = result.get("context_management")
+
+            messages.append({"role": "assistant", "content": content_blocks})
+
+            print(f"  Input tokens:  {usage.get('input_tokens', 0)}")
+            print(f"  Output tokens: {usage.get('output_tokens', 0)}")
+
+            # Check for thinking blocks
+            thinking_block = next(
+                (b for b in content_blocks if b.get("type") == "thinking"), None
+            )
+            if thinking_block:
+                thinking_seen = True
+                preview = thinking_block["thinking"][:100].replace("\n", " ")
+                print(f"  Thinking: {preview}...")
+
+            # Check for text response
+            text_block = next(
+                (b for b in content_blocks if b.get("type") == "text"), None
+            )
+            if text_block:
+                print(f"  Response: {text_block['text'][:150]}")
+
+            # Check context management clearing
+            if context_mgmt:
+                print(f"  context_management: {json.dumps(context_mgmt)}")
+                edits = context_mgmt.get("applied_edits", [])
+                for edit in edits:
+                    if edit.get("type") == "clear_thinking_20251015":
+                        cleared = edit.get("cleared_thinking_turns", 0)
+                        saved = edit.get("cleared_input_tokens", 0)
+                        if cleared > 0:
+                            total_cleared_turns += cleared
+                            total_saved_tokens += saved
+                            print(
+                                f"  Cleared {cleared} thinking turn(s), saved {saved} tokens"
+                            )
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}"
+        print(f"\n--- BEDROCK ERROR ---")
+        print(f"  {error_msg}")
+        return ("ERROR", error_msg)
+
+    print(f"\n  Thinking blocks seen:     {thinking_seen}")
+    print(f"  Total thinking cleared:   {total_cleared_turns}")
+    print(f"  Total tokens saved:       {total_saved_tokens}")
+
+    if not thinking_seen:
+        msg = "No thinking blocks were produced"
+        print(f"\n  Result: FAIL - {msg}")
+        return ("FAIL", msg)
+
+    if total_cleared_turns == 0:
+        msg = "No thinking turns were cleared by context management"
+        print(f"\n  Result: FAIL - {msg}")
+        return ("FAIL", msg)
+
+    print(
+        f"\n  Result: PASS - cleared {total_cleared_turns} thinking turn(s), saved {total_saved_tokens} tokens"
+    )
+    return ("PASS", None)
+
+
+def print_summary(results):
+    """Print a summary table of all test outcomes."""
+    print("=" * 70)
+    print("  SUMMARY")
+    print("=" * 70)
+
+    name_width = max(len(name) for name, _, _ in results)
+
+    for name, status, error in results:
+        line = f"  {name:<{name_width}}  {status}"
+        if error:
+            line += f"  {error}"
+        print(line)
+
+    passes = sum(1 for _, s, _ in results if s == "PASS")
+    fails = sum(1 for _, s, _ in results if s == "FAIL")
+    errors = sum(1 for _, s, _ in results if s == "ERROR")
+
+    print()
+    print(f"  Results: {passes} PASS, {fails} FAIL, {errors} ERROR")
+    print("=" * 70)
+
+    return all(s == "PASS" for _, s, _ in results)
+
+
+def main():
+    config = load_config()
+    model_id = config["bedrock_model_id"]
+    client = get_bedrock_client(config)
+
+    print(f"Model: {model_id}")
+    print(f"Beta: {CONTEXT_MGMT_BETA}")
+    print()
+
+    results = []
+
+    status, error = test_clear_thinking(client, model_id)
+    results.append(("Clear thinking", status, error))
+
+    all_passed = print_summary(results)
+    sys.exit(0 if all_passed else 1)
+
+
+if __name__ == "__main__":
+    main()

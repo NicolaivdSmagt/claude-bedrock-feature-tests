@@ -69,18 +69,24 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `structured_outputs.py` | JSON schema output + strict tool use |
 | `count_tokens.py` | count_tokens API |
 | `code_execution.py` | Code execution tool (expected to fail on Bedrock) |
-| `tool_search.py` | Server-side regex tool search |
-| `tool_search_custom.py` | Client-side custom tool search |
+| `tool_search_invoke.py` | Tool search: regex, BM25, custom client-side (invoke_model) |
+| `tool_search_converse.py` | Tool search: regex, BM25, custom client-side (Converse) |
 | `web_search_invoke.py` | Web search (invoke_model) |
 | `web_search_converse.py` | Web search (Converse) |
 | `parallel_tool_use.py` | Parallel tool calls in a single response |
 | `clear_thinking_test.py` | Clear old thinking blocks to save tokens |
 | `clear_tool_use_test.py` | Clear old tool use/result pairs |
-| `compaction.py` | Message compaction |
+| `compaction_invoke.py` | Message compaction (invoke_model) |
+| `compaction_converse.py` | Message compaction (Converse) |
+| `mcp_connector_invoke.py` | MCP connector: remote MCP server connection (invoke_model) |
+| `mcp_connector_converse.py` | MCP connector: remote MCP server connection (Converse) |
 | `memory_test.py` | Memory tool (create + retrieve across sessions) |
-| `image_limit.py` | Image count limit per request |
-| `image_size_limit.py` | Maximum image size (single + multi) |
-| `pdf_limits.py` | PDF count and payload size limits |
+| `image_limit_invoke.py` | Image count limit per request (invoke_model) |
+| `image_limit_converse.py` | Image count limit per request (Converse) |
+| `image_size_limit_invoke.py` | Maximum image size, single + multi (invoke_model) |
+| `image_size_limit_converse.py` | Maximum image size, single + multi (Converse) |
+| `pdf_limits_invoke.py` | PDF count and payload size limits (invoke_model) |
+| `pdf_limits_converse.py` | PDF count and payload size limits (Converse) |
 | `1M_context_invoke.py` | 1M context window (invoke_model) |
 | `1M_context_converse.py` | 1M context window (Converse) |
 | `magic_strings.py` | Redacted thinking + streaming refusal magic string behavior |
@@ -93,6 +99,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `caching_min_prefix.py` | Minimum prefix size for prompt caching |
 | `code_execution.py` | Code execution tool |
 | `image_size_limit.py` | Maximum image size limits |
+| `mcp_connector.py` | MCP connector: remote MCP server connection and tool discovery |
 | `tool_search.py` | Server-side tool search (regex + BM25) |
 
 ### Inactive Tests (`tests/inactive/`)

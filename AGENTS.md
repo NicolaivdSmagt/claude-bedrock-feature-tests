@@ -126,8 +126,8 @@ Every test script follows this pattern:
 
 Tests produce structured console output: section headers (`"=" * 70`), labeled
 fields, JSON dumps for request/response bodies, PASS/FAIL verdicts, and summary
-comparison tables. Test functions return either `(bool, str, Optional[dict])` or
-`dict` with structured result fields (`error`, `usage`, `elapsed_ms`, etc.).
+comparison tables. Test functions return `(status, error_msg)` tuples as
+described in the PASS/FAIL Summary Table section below.
 
 ### PASS/FAIL Summary Table
 
@@ -181,7 +181,8 @@ Most Bedrock tests must have both an `_invoke.py` and `_converse.py` variant:
 
 Certain tests (such as magic_strings.py) test functionality that is API agnostic.
 Those do not require separate variants for Converse and invoke_model APIs.
- 
+
+
 ### Converse API Patterns
 
 The Converse API has several structural differences from invoke_model:

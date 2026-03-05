@@ -168,12 +168,110 @@ sequentially, collects results with descriptive labels, and delegates to
 
 All tests make real API calls. Never implement mock modes or fake responses.
 
+### Invoke / Converse Pairs
+
+Every Bedrock test must have both an `_invoke.py` and `_converse.py` variant:
+
+- **Invoke** (`client.invoke_model()`) uses the Anthropic-native JSON body
+  format: `stop_reason`, `cache_control`, `tool_use` / `tool_result` content
+  blocks, betas in `anthropic_beta`, etc.
+- **Converse** (`client.converse()`) uses the Converse-native format:
+  `stopReason`, `toolUse` / `toolResult`, content as `[{"text": "..."}]`,
+  and Anthropic-specific features passed via `additionalModelRequestFields`.
+
+### Converse API Patterns
+
+The Converse API has several structural differences from invoke_model:
+
+- **Placeholder toolSpec**: When using Anthropic-specific tools (memory,
+  code execution, etc.) via `additionalModelRequestFields`, Converse still
+  requires at least one `toolSpec` in `toolConfig.tools`:
+  ```python
+  PLACEHOLDER_TOOL_CONFIG = {
+      "tools": [{"toolSpec": {"name": "placeholder",
+                              "inputSchema": {"json": {"type": "object"}}}}]
+  }
+  ```
+
+- **Beta headers and tool definitions** go in `additionalModelRequestFields`:
+  ```python
+  additionalModelRequestFields={
+      "anthropic_beta": ["context-management-2025-06-27"],
+      "tools": [{"type": "memory_20250818", "name": "memory"}],
+  }
+  ```
+
+- **Cache points** use `cachePoint` as a separate content block (not inline
+  like invoke's `cache_control`):
+  ```python
+  system=[{"text": content}, {"cachePoint": {"type": "default", "ttl": "1h"}}]
+  ```
+
+- **camelCase keys** throughout: `inputTokens`, `outputTokens`,
+  `cacheWriteInputTokens`, `cacheReadInputTokens`, `stopReason`, `toolUseId`,
+  `maxTokens`, etc.
+
+- **context_management not returned in responses**: The Converse API accepts
+  `context_management` parameters without error, and clearing does happen
+  server-side, but the response does NOT include a `context_management` field
+  with clearing stats (unlike invoke_model which returns `applied_edits`).
+  To verify clearing in Converse tests, compare input token counts between
+  runs with and without `context_management` enabled.
+
+- **Some beta features not supported on Converse**: Tool search
+  (`tool-search-tool-2025-10-19`) and compaction (`compact-2026-01-12`)
+  are not supported on the Converse API. Scripts will ERROR when run,
+  which is expected and intentional for validation.
+
+### Error Classification
+
+For tests that validate features which may not be available on Bedrock,
+use error markers and a `classify_error()` helper:
+
+- **Feature not available** (classify as `FAIL`): When Bedrock returns
+  "The provided request is not valid" or "does not match any of the expected
+  tags", this means the feature isn't supported. Use
+  `FEATURE_NOT_AVAILABLE_MARKERS` list to detect these.
+- **Size/limit errors** (classify as `FAIL`): When testing size limits,
+  match against `SIZE_LIMIT_ERROR_MARKERS` which includes `"too large"`,
+  `"too long"`, `"input is too long"`, `"size limit"`, `"maximum size"`,
+  `"payload"`, `"exceeds"`, `"request size"`, `"content length"`,
+  `"image size"`, `"too many"`.
+- **Other errors** (classify as `ERROR`): Auth failures, network problems,
+  or unexpected exceptions that aren't related to the feature under test.
+
+### Limit Test Pattern
+
+Tests that validate API limits (image count, image size, PDF limits) use a
+single overall verdict pattern:
+
+1. Run multiple test cases (e.g. 20/21/100/101 images)
+2. Show raw API output per case (stop_reason, usage, content on success;
+   full exception on failure) — don't use canned strings like "Expected
+   rejection but succeeded"
+3. Print a summary table
+4. Compute a single PASS/FAIL/ERROR verdict at the end
+
+### Don't Truncate Error Messages
+
+The `print_summary()` function must NOT truncate error strings (no `[:120]`
+etc.) — show the full message so failures can be diagnosed from test output.
+
+### Caching Threshold
+
+Bedrock prompt caching requires a minimum of ~2048 tokens in the cached
+content. For tests that need large system prompts (e.g. extended cache TTL),
+use `files/50000_token_conversation.json` as a content source — load its
+`system`, `tools`, and/or first N `messages` to build content above the
+threshold.
+
 ### Adding New Tests
 
 1. Create a `.py` file in `tests/bedrock/` or `tests/anthropic/`
-2. Start with ABOUTME comments and the standard import preamble
-3. Use `load_config()` and client helpers from `load_config.py`
-4. Use `config["bedrock_model_id"]` / `config["anthropic_model_id"]`
-5. The automated runner discovers tests via `tests/<suite>/*.py` glob
-6. Exit with code 0 on success, non-zero on failure
-7. Add the test to the appropriate table in `README.md` (Bedrock or Anthropic)
+2. For Bedrock: create both `_invoke.py` and `_converse.py` variants
+3. Start with ABOUTME comments and the standard import preamble
+4. Use `load_config()` and client helpers from `load_config.py`
+5. Use `config["bedrock_model_id"]` / `config["anthropic_model_id"]`
+6. The automated runner discovers tests via `tests/<suite>/*.py` glob
+7. Exit with code 0 on success, non-zero on failure
+8. Add the test to the appropriate table in `README.md` (Bedrock or Anthropic)

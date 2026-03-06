@@ -2,7 +2,7 @@
 
 Standalone test scripts for validating Claude API features on Amazon Bedrock and the Anthropic 1st-party API. Covers adaptive thinking, caching, structured outputs, tool use, vision, PDFs, context windows, and more.
 
-An automated test runner executes all tests via subprocess and produces a markdown report with live status output, making it easy to revalidate the full API surface when new models launch.
+An automated test runner executes all tests via subprocess, then uses Claude (via Bedrock) to classify the results and produce a markdown report. This gives accurate, context-aware classification of test outcomes without brittle regex parsing.
 
 ## Quick Start
 
@@ -41,7 +41,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 .
 ├── config.yaml              # Centralized configuration
 ├── load_config.py           # Shared config loader + client helpers
-├── run_tests.py             # Automated test runner (subprocess)
+├── run_tests.py             # Automated test runner (subprocess + LLM classification)
 ├── tests/
 │   ├── bedrock/             # Bedrock API tests (invoke_model + Converse)
 │   ├── anthropic/           # Anthropic 1st-party API tests
@@ -120,7 +120,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 
 ### Automated (recommended)
 
-The test runner executes all tests via subprocess and prints live status as each completes:
+The test runner executes all tests via subprocess, printing live status as each completes. After all tests finish, it sends the captured output to Claude (via Bedrock) for accurate classification and report generation:
 
 ```bash
 # Bedrock tests only (default)
@@ -140,6 +140,9 @@ uv run python run_tests.py -o auto
 
 # Include full raw output from each test
 uv run python run_tests.py -v
+
+# Skip LLM classification (use regex-based heuristics only)
+uv run python run_tests.py --no-llm
 ```
 
 Environment variables:

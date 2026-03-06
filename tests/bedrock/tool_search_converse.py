@@ -40,6 +40,29 @@ from load_config import load_config, get_bedrock_client
 
 TOOL_SEARCH_BETA = "tool-search-tool-2025-10-19"
 
+# Error markers indicating that a feature is not available on Bedrock. These
+# map to FAIL (feature not supported) rather than ERROR (transient/infra).
+FEATURE_NOT_AVAILABLE_MARKERS = [
+    "the provided request is not valid",
+    "not supported",
+    "not currently supported",
+    "unknown field",
+    "unrecognized",
+    "unknown tool type",
+    "does not match any of the expected tags",
+]
+
+
+def classify_error(error_msg):
+    """Classify an error as FAIL (feature not available) or ERROR (other).
+    Returns (status, error_msg)."""
+    lower = error_msg.lower()
+    for marker in FEATURE_NOT_AVAILABLE_MARKERS:
+        if marker in lower:
+            return ("FAIL", error_msg)
+    return ("ERROR", error_msg)
+
+
 # Converse requires at least one toolSpec in toolConfig; this placeholder satisfies that.
 PLACEHOLDER_TOOL_CONFIG = {
     "tools": [
@@ -135,7 +158,7 @@ def test_regex_search(client, model_id):
         error_msg = f"{type(e).__name__}: {e}"
         print("\n--- BEDROCK ERROR ---")
         print(f"  {error_msg}")
-        return ("ERROR", error_msg)
+        return classify_error(error_msg)
 
     finally:
         print()
@@ -221,7 +244,7 @@ def test_bm25_search(client, model_id):
         error_msg = f"{type(e).__name__}: {e}"
         print("\n--- BEDROCK ERROR ---")
         print(f"  {error_msg}")
-        return ("ERROR", error_msg)
+        return classify_error(error_msg)
 
     finally:
         print()
@@ -307,7 +330,7 @@ def test_custom_search(client, model_id):
         error_msg = f"{type(e).__name__}: {e}"
         print("\n--- BEDROCK ERROR (step 1) ---")
         print(f"  {error_msg}")
-        return ("ERROR", error_msg)
+        return classify_error(error_msg)
 
     print("\n--- RESPONSE ---")
     print(json.dumps(response, indent=2, default=str))
@@ -413,7 +436,7 @@ def test_custom_search(client, model_id):
         error_msg = f"{type(e).__name__}: {e}"
         print("\n--- BEDROCK ERROR (step 3) ---")
         print(f"  {error_msg}")
-        return ("ERROR", error_msg)
+        return classify_error(error_msg)
 
     finally:
         print()

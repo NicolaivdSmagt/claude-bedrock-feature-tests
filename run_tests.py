@@ -1,33 +1,22 @@
 #!/usr/bin/env python3
-# ABOUTME: Test runner that uses the Claude Agent SDK to execute all Bedrock and Anthropic tests.
+# ABOUTME: Test runner that executes all test scripts via subprocess with live status output.
 # ABOUTME: Generates a markdown report with result tables and summary statistics.
 
 import argparse
-import asyncio
-import os
+import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
-import yaml
+from load_config import load_config
 
-try:
-    from claude_code_sdk import query, ClaudeCodeOptions, AssistantMessage, TextBlock
-except ImportError:
-    print("Error: claude-code-sdk not installed. Run: uv add claude-code-sdk")
-    sys.exit(1)
-
-
-def load_config():
-    """Load configuration from config.yaml."""
-    config_path = Path(__file__).parent / "config.yaml"
-    with open(config_path) as f:
-        return yaml.safe_load(f)
+PROJECT_ROOT = Path(__file__).parent
 
 
 def discover_tests(suite: str) -> list[Path]:
     """Discover test scripts for the given suite (bedrock, anthropic, or all)."""
-    base = Path(__file__).parent / "tests"
+    base = PROJECT_ROOT / "tests"
     tests = []
 
     suites = []
@@ -44,147 +33,205 @@ def discover_tests(suite: str) -> list[Path]:
     return tests
 
 
-def build_prompt(
-    suite: str, tests: list[Path], config: dict, timeout: int, verbose: bool
-) -> str:
-    """Build the prompt for the Claude agent."""
-    test_list = "\n".join(f"  - {t.parent.name}/{t.name}" for t in tests)
+def classify_result(exit_code: int, stdout: str, stderr: str):
+    """Classify a test result into (status, notes, error_detail).
 
-    verbose_capture = ""
-    if verbose:
-        verbose_capture = (
-            "\n2. For each test, capture the FULL stdout/stderr output (do NOT truncate with tail)."
-            "\n   Save the complete output — it will be included in the report."
-        )
-    else:
-        verbose_capture = (
-            "\n2. For each test, capture:"
-            "\n   - The exit code (0 = success, non-zero = failure)"
-            "\n   - The last 30 lines of output (use `tail -30` via piping)"
-            "\n   - Whether the test passed, failed, or had an error"
-        )
-
-    verbose_section = ""
-    if verbose:
-        verbose_section = """
-
-## Raw Output
-
-For each test, include a section with the full output:
-
-### <test_name.py>
-
-```
-<full stdout/stderr output>
-```
-
-(Repeat for each test)
-"""
-
-    return f"""You are a test runner. Your job is to execute Python test scripts and produce a structured markdown report.
-
-## Configuration
-- Region: {config["region"]}
-- Bedrock Model: {config["bedrock_model_id"]}
-- Anthropic Model: {config.get("anthropic_model_id", "N/A")}
-- AWS Profile: {config.get("aws_profile", "default")}
-- Timestamp: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Test Scripts to Run
-{test_list}
-
-## Instructions
-
-1. Run each test script listed above using: `AWS_PROFILE={config.get("aws_profile", "default")} timeout {timeout} uv run python <script_path>`
-   Run them from the working directory: {Path(__file__).parent}
-{verbose_capture}
-
-3. Classify each test result as one of:
-   - **PASS**: Exit code 0 and output indicates success (look for "PASS", "SUCCESS", "PASSED", correct results, or no errors)
-   - **FAIL**: Exit code 0 but output shows test failures (look for "FAIL", "FAILED", expected failures like "does NOT work on Bedrock")
-   - **FAIL (expected)**: The test demonstrates a known limitation (e.g., code_execution not working on Bedrock). Mark as "FAIL (expected)" and note why.
-   - **ERROR**: Exit code non-zero, or Python traceback/exception in output
-
-4. Write a concise "Notes" column (max ~80 chars) summarizing what happened.
-   For errors, include the key error message in an "Errors" column.
-
-5. After running ALL tests, produce EXACTLY the following markdown output (and nothing else before or after it):
-
-```
-# Test Report
-
-**Date:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-**Suite:** {suite}
-**Region:** {config["region"]}
-**Bedrock Model:** {config["bedrock_model_id"]}
-**Anthropic Model:** {config.get("anthropic_model_id", "N/A")}
-
-## Results
-
-| # | Test | Result | Notes | Errors |
-|---|------|--------|-------|--------|
-| 1 | test_name.py | PASS | Description of what happened | |
-...
-
-## Summary
-
-| Status | Count |
-|--------|-------|
-| PASS | N |
-| FAIL | N |
-| FAIL (expected) | N |
-| ERROR | N |
-| **Total** | **N** |
-{verbose_section}```
-
-IMPORTANT RULES:
-- Run ALL {len(tests)} tests. Do not skip any.
-- Run tests ONE AT A TIME sequentially (they make API calls that could conflict).
-- Use `timeout {timeout}` for each test to prevent hangs.
-- The final output must be ONLY the markdown report, nothing else.
-- Do not ask any questions. Just run the tests and produce the report.
-"""
-
-
-async def run_agent(prompt: str, cwd: str) -> str:
-    """Run the Claude agent and collect its final text output."""
-    options = ClaudeCodeOptions(
-        allowed_tools=["Bash"],
-        permission_mode="acceptEdits",
-        cwd=cwd,
-        max_turns=100,
-    )
-
-    final_text = ""
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, AssistantMessage):
-            for block in message.content:
-                if isinstance(block, TextBlock):
-                    final_text = block.text
-
-    return final_text
-
-
-def extract_markdown_report(text: str) -> str:
-    """Extract the markdown report from the agent's output.
-
-    The agent may produce intermediate text before the final report.
-    We look for the report starting with '# Test Report'.
+    Parses the test output for status information. Recognizes two formats:
+    - Multi-test summary:  "Results: N PASS, N FAIL, N ERROR"
+    - Single-verdict:      "Result: PASS" / "Result: FAIL" / "Result: ERROR"
+    Falls back to exit code if neither is found.
     """
-    # Look for the report header
-    marker = "# Test Report"
-    idx = text.rfind(marker)
-    if idx >= 0:
-        return text[idx:]
+    summary_line = None
+    single_verdict = None
 
-    # Fallback: return everything
-    return text
+    for line in reversed(stdout.splitlines()):
+        stripped = line.strip()
+        # Multi-test summary: "Results: N PASS, N FAIL, N ERROR"
+        if (
+            not summary_line
+            and "Results:" in stripped
+            and ("PASS" in stripped or "FAIL" in stripped)
+        ):
+            summary_line = stripped
+        # Single-verdict: "Result: PASS - ..." or "Result: FAIL - ..."
+        if not single_verdict and stripped.startswith("Result:"):
+            single_verdict = stripped
+
+    # Use multi-test summary if available, otherwise single verdict
+    status_line = summary_line or single_verdict
+
+    # Extract error detail from stderr or last non-trivial stdout line
+    error_detail = ""
+    if exit_code != 0 or (
+        status_line and ("FAIL" in status_line or "ERROR" in status_line)
+    ):
+        for source in (stderr, stdout):
+            for line in reversed(source.splitlines()):
+                stripped = line.strip()
+                if stripped and not stripped.startswith("="):
+                    error_detail = stripped
+                    break
+            if error_detail:
+                break
+
+    if status_line:
+        if summary_line:
+            # Multi-test format: "Results: N PASS, N FAIL, N ERROR"
+            has_fail = "FAIL" in summary_line and "0 FAIL" not in summary_line
+            has_error = "ERROR" in summary_line and "0 ERROR" not in summary_line
+            if has_fail:
+                return ("FAIL", summary_line, error_detail)
+            elif has_error:
+                return ("ERROR", summary_line, error_detail)
+            else:
+                return ("PASS", summary_line, "")
+        else:
+            # Single-verdict format: "Result: PASS - ..." / "Result: FAIL - ..."
+            if "FAIL" in single_verdict:
+                return ("FAIL", single_verdict, error_detail)
+            elif "ERROR" in single_verdict:
+                return ("ERROR", single_verdict, error_detail)
+            else:
+                return ("PASS", single_verdict, "")
+
+    # No status line found
+    if exit_code != 0:
+        return ("ERROR", "non-zero exit code", error_detail)
+
+    return ("PASS", "exit code 0 (no summary line)", "")
+
+
+def run_test(test_path: Path, timeout: int) -> dict:
+    """Run a single test script and return structured results."""
+    name = test_path.name
+    suite = test_path.parent.name
+
+    start = time.monotonic()
+    try:
+        result = subprocess.run(
+            ["uv", "run", "python", str(test_path)],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(PROJECT_ROOT),
+        )
+        elapsed = time.monotonic() - start
+        status, notes, error_detail = classify_result(
+            result.returncode, result.stdout, result.stderr
+        )
+        return {
+            "name": name,
+            "suite": suite,
+            "exit_code": result.returncode,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "elapsed": elapsed,
+            "status": status,
+            "notes": notes,
+            "error_detail": error_detail,
+        }
+    except subprocess.TimeoutExpired as e:
+        elapsed = time.monotonic() - start
+        return {
+            "name": name,
+            "suite": suite,
+            "exit_code": -1,
+            "stdout": (e.stdout or b"").decode(errors="replace")
+            if isinstance(e.stdout, bytes)
+            else (e.stdout or ""),
+            "stderr": (e.stderr or b"").decode(errors="replace")
+            if isinstance(e.stderr, bytes)
+            else (e.stderr or ""),
+            "elapsed": elapsed,
+            "status": "ERROR",
+            "notes": f"timeout after {timeout}s",
+            "error_detail": f"Process killed after {timeout}s timeout",
+        }
+    except Exception as e:
+        elapsed = time.monotonic() - start
+        return {
+            "name": name,
+            "suite": suite,
+            "exit_code": -1,
+            "stdout": "",
+            "stderr": str(e),
+            "elapsed": elapsed,
+            "status": "ERROR",
+            "notes": "failed to execute",
+            "error_detail": f"{type(e).__name__}: {e}",
+        }
+
+
+def generate_report(
+    results: list[dict], config: dict, suite: str, verbose: bool
+) -> str:
+    """Generate a markdown report from test results."""
+    lines = []
+    lines.append("# Test Report")
+    lines.append("")
+    lines.append(f"**Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"**Suite:** {suite}")
+    lines.append(f"**Region:** {config['region']}")
+    lines.append(f"**Bedrock Model:** {config['bedrock_model_id']}")
+    lines.append(f"**Anthropic Model:** {config.get('anthropic_model_id', 'N/A')}")
+    lines.append("")
+
+    # Results table
+    lines.append("## Results")
+    lines.append("")
+    lines.append("| # | Test | Result | Time | Notes | Errors |")
+    lines.append("|---|------|--------|------|-------|--------|")
+
+    for i, r in enumerate(results, 1):
+        elapsed_str = f"{r['elapsed']:.1f}s"
+        notes = r["notes"].replace("|", "\\|")
+        error = r["error_detail"].replace("|", "\\|") if r["error_detail"] else ""
+        lines.append(
+            f"| {i} | {r['name']} | {r['status']} | {elapsed_str} | {notes} | {error} |"
+        )
+
+    lines.append("")
+
+    # Summary table
+    passes = sum(1 for r in results if r["status"] == "PASS")
+    fails = sum(1 for r in results if r["status"] == "FAIL")
+    errors = sum(1 for r in results if r["status"] == "ERROR")
+    total = len(results)
+
+    lines.append("## Summary")
+    lines.append("")
+    lines.append("| Status | Count |")
+    lines.append("|--------|-------|")
+    lines.append(f"| PASS | {passes} |")
+    lines.append(f"| FAIL | {fails} |")
+    lines.append(f"| ERROR | {errors} |")
+    lines.append(f"| **Total** | **{total}** |")
+    lines.append("")
+
+    total_time = sum(r["elapsed"] for r in results)
+    lines.append(f"**Total time:** {total_time:.1f}s")
+    lines.append("")
+
+    # Verbose raw output
+    if verbose:
+        lines.append("## Raw Output")
+        lines.append("")
+        for r in results:
+            lines.append(f"### {r['name']}")
+            lines.append("")
+            lines.append("```")
+            output = r["stdout"]
+            if r["stderr"]:
+                output += "\n--- stderr ---\n" + r["stderr"]
+            lines.append(output.rstrip())
+            lines.append("```")
+            lines.append("")
+
+    return "\n".join(lines)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Run API feature tests via Claude Agent SDK"
-    )
+    parser = argparse.ArgumentParser(description="Run API feature tests via subprocess")
     parser.add_argument(
         "--suite",
         choices=["bedrock", "anthropic", "all"],
@@ -202,7 +249,7 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Save report to file (default: screen only). Use 'auto' for auto-generated filename.",
+        help="Save report to file. Use 'auto' for auto-generated filename.",
     )
     parser.add_argument(
         "-v",
@@ -219,28 +266,49 @@ def main():
         print(f"No tests found for suite '{args.suite}'")
         sys.exit(1)
 
-    print(f"Discovered {len(tests)} tests for suite '{args.suite}'")
+    total = len(tests)
     print(f"Region: {config['region']}")
-    print(f"Bedrock Model: {config['bedrock_model_id']}")
-    print(f"Timeout per test: {args.timeout}s")
+    print(f"Model:  {config['bedrock_model_id']}")
+    print(f"Timeout: {args.timeout}s per test")
+    print()
+    print(f"Running {total} {args.suite} tests...")
     print()
 
-    cwd = str(Path(__file__).parent)
-    prompt = build_prompt(args.suite, tests, config, args.timeout, args.verbose)
+    # Run tests sequentially, print status as each completes
+    results = []
+    name_width = max(len(t.name) for t in tests)
 
-    print("Starting Claude agent to run tests...")
-    print("=" * 60)
+    for i, test_path in enumerate(tests, 1):
+        r = run_test(test_path, args.timeout)
+        results.append(r)
 
-    result_text = asyncio.run(run_agent(prompt, cwd))
-    report = extract_markdown_report(result_text)
+        elapsed_str = f"{r['elapsed']:.1f}s"
+        line = f"  [{i:>{len(str(total))}}/{total}]  {r['status']:<5}  {r['name']:<{name_width}}  {elapsed_str:>7}"
+        if r["status"] == "ERROR" and "timeout" in r["notes"]:
+            line += "  (timeout)"
+        print(line)
+
+    # Print summary line
+    passes = sum(1 for r in results if r["status"] == "PASS")
+    fails = sum(1 for r in results if r["status"] == "FAIL")
+    errors = sum(1 for r in results if r["status"] == "ERROR")
+    total_time = sum(r["elapsed"] for r in results)
 
     print()
     print("=" * 60)
+    print(
+        f"{total} tests: {passes} PASS, {fails} FAIL, {errors} ERROR  "
+        f"({total_time:.1f}s)"
+    )
+    print("=" * 60)
 
-    # Save to file only if -o was specified
+    # Generate report
+    report = generate_report(results, config, args.suite, args.verbose)
+
+    # Save to file if requested
     if args.output:
         if args.output == "auto":
-            reports_dir = Path(__file__).parent / "reports"
+            reports_dir = PROJECT_ROOT / "reports"
             reports_dir.mkdir(exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             model_slug = config["bedrock_model_id"].replace(".", "_").replace(":", "_")
@@ -251,10 +319,15 @@ def main():
             output_path = Path(args.output)
 
         output_path.write_text(report)
-        print(f"Report written to: {output_path}")
+        print(f"\nReport written to: {output_path}")
 
-    print()
-    print(report)
+    # Print full report if saving to file (user can review both)
+    # If not saving, print the report to stdout
+    if not args.output:
+        print()
+        print(report)
+
+    sys.exit(0 if (fails == 0 and errors == 0) else 1)
 
 
 if __name__ == "__main__":

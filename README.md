@@ -2,7 +2,7 @@
 
 Standalone test scripts for validating Claude API features on Amazon Bedrock and the Anthropic 1st-party API. Covers adaptive thinking, caching, structured outputs, tool use, vision, PDFs, context windows, and more.
 
-An automated test runner (powered by the Claude Agent SDK) executes all tests and produces a markdown report, making it easy to revalidate the full API surface when new models launch.
+An automated test runner executes all tests via subprocess and produces a markdown report with live status output, making it easy to revalidate the full API surface when new models launch.
 
 ## Quick Start
 
@@ -14,7 +14,7 @@ uv sync
 vim config.yaml
 
 # Run all Bedrock tests
-export AWS_PROFILE=work CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=eu-west-1
+export AWS_PROFILE=work
 uv run python run_tests.py --suite bedrock
 ```
 
@@ -41,7 +41,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 .
 ├── config.yaml              # Centralized configuration
 ├── load_config.py           # Shared config loader + client helpers
-├── run_tests.py             # Automated test runner (Claude Agent SDK)
+├── run_tests.py             # Automated test runner (subprocess)
 ├── tests/
 │   ├── bedrock/             # Bedrock API tests (invoke_model + Converse)
 │   ├── anthropic/           # Anthropic 1st-party API tests
@@ -120,7 +120,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 
 ### Automated (recommended)
 
-The test runner uses the Claude Agent SDK to execute all tests and generate a report:
+The test runner executes all tests via subprocess and prints live status as each completes:
 
 ```bash
 # Bedrock tests only (default)
@@ -135,13 +135,14 @@ uv run python run_tests.py --suite all
 # Custom timeout per test (default: 300s)
 uv run python run_tests.py --timeout 600
 
-# Custom output file
-uv run python run_tests.py --output results.md
+# Save report to file (use 'auto' for auto-generated filename)
+uv run python run_tests.py -o auto
+
+# Include full raw output from each test
+uv run python run_tests.py -v
 ```
 
-Environment variables for the Agent SDK:
-- `CLAUDE_CODE_USE_BEDROCK=1` - Use Bedrock as the SDK backend
-- `AWS_REGION` - Region for the SDK (can differ from test region)
+Environment variables:
 - `AWS_PROFILE` - AWS credentials profile
 
 ### Manual (individual tests)
@@ -160,7 +161,7 @@ uv run python tests/anthropic/caching_min_prefix.py
 - [uv](https://docs.astral.sh/uv/) for package management
 - AWS credentials with Bedrock access
 - For Anthropic API tests: API key stored in AWS Secrets Manager
-- For the automated runner: Claude Agent SDK (`uv add claude-code-sdk`)
+
 
 ## Test Assets (`files/`)
 

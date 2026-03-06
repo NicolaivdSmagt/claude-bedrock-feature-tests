@@ -33,6 +33,29 @@ from load_config import load_config
 COMPACTION_TRIGGER_TOKENS = 50_000
 COMPACTION_BETA = "compact-2026-01-12"
 
+# Error markers indicating that a feature is not available on Bedrock. These
+# map to FAIL (feature not supported) rather than ERROR (transient/infra).
+FEATURE_NOT_AVAILABLE_MARKERS = [
+    "the provided request is not valid",
+    "not supported",
+    "not currently supported",
+    "unknown field",
+    "unrecognized",
+    "unknown tool type",
+    "does not match any of the expected tags",
+]
+
+
+def classify_error(error_msg):
+    """Classify an error as FAIL (feature not available) or ERROR (other).
+    Returns (status, error_msg)."""
+    lower = error_msg.lower()
+    for marker in FEATURE_NOT_AVAILABLE_MARKERS:
+        if marker in lower:
+            return ("FAIL", error_msg)
+    return ("ERROR", error_msg)
+
+
 CUSTOM_COMPACTION_PROMPT = (
     "You have written a partial transcript for the initial task above. "
     "Please write a summary of the transcript. The purpose of this summary "
@@ -240,7 +263,7 @@ def test_compaction(client, model_id, messages, system, tools, stored_token_coun
         print(f"\nResponse failed after {elapsed:.1f}s")
         print(f"\n--- BEDROCK ERROR ---")
         print(f"  {error_msg}")
-        return ("ERROR", error_msg)
+        return classify_error(error_msg)
 
     finally:
         print()

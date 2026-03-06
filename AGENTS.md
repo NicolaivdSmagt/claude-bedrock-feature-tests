@@ -4,14 +4,14 @@
 
 Standalone Python test scripts for validating Claude API features and parity
 between Amazon Bedrock and the Anthropic 1st-party API. Each test script is
-self-contained and makes real API calls. An automated test runner (powered by
-the Claude Agent SDK) can execute all tests and produce a markdown report.
+self-contained and makes real API calls. An automated test runner executes all
+tests via subprocess and produces a markdown report.
 
 ## Directory Structure
 
 - `config.yaml` — Centralized config (region, model IDs, AWS profile)
 - `load_config.py` — Shared config loader + Bedrock/Anthropic client helpers
-- `run_tests.py` — Automated test runner (Claude Agent SDK)
+- `run_tests.py` — Automated test runner (subprocess)
 - `tests/bedrock/` — Bedrock API tests (invoke_model + Converse)
 - `tests/anthropic/` — Anthropic 1st-party API tests
 - `tests/inactive/` — Tests for features not available on current models

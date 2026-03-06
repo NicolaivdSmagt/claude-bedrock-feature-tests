@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
-# ABOUTME: Test runner that executes all test scripts via subprocess with live status output.
+# ABOUTME: Test runner that executes tests via subprocess and uses Claude to classify results.
 # ABOUTME: Generates a markdown report with result tables and summary statistics.
 
 import argparse
+import json
 import subprocess
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-from load_config import load_config
+from load_config import load_config, get_bedrock_client
 
 PROJECT_ROOT = Path(__file__).parent
+
+# Maximum characters of stdout/stderr to include per test in the LLM prompt.
+# Keeps the total prompt size manageable while preserving the most relevant output
+# (the end of test output contains the summary/verdict lines).
+MAX_OUTPUT_CHARS_PER_TEST = 8000
 
 
 def discover_tests(suite: str) -> list[Path]:
@@ -34,9 +40,12 @@ def discover_tests(suite: str) -> list[Path]:
 
 
 def classify_result(exit_code: int, stdout: str, stderr: str):
-    """Classify a test result into (status, notes, error_detail).
+    """Classify a test result using regex-based heuristics.
 
-    Parses the test output for status information. Recognizes two formats:
+    Returns (status, notes, error_detail). Used for live status output during
+    test execution and as a fallback when LLM classification is unavailable.
+
+    Recognizes two output formats:
     - Multi-test summary:  "Results: N PASS, N FAIL, N ERROR"
     - Single-verdict:      "Result: PASS" / "Result: FAIL" / "Result: ERROR"
     Falls back to exit code if neither is found.
@@ -162,8 +171,173 @@ def run_test(test_path: Path, timeout: int) -> dict:
         }
 
 
+def truncate_output(text: str, max_chars: int) -> str:
+    """Truncate text to max_chars, keeping the end (where verdicts are).
+
+    If truncation occurs, prepends a marker showing how many characters were
+    omitted so the reader knows context was removed.
+    """
+    if len(text) <= max_chars:
+        return text
+    omitted = len(text) - max_chars
+    return f"[...{omitted} chars omitted...]\n" + text[-max_chars:]
+
+
+def build_llm_prompt(results: list[dict]) -> str:
+    """Build the classification prompt containing all test outputs."""
+    test_blocks = []
+    for r in results:
+        stdout = truncate_output(r["stdout"], MAX_OUTPUT_CHARS_PER_TEST)
+        stderr = (
+            truncate_output(r["stderr"], MAX_OUTPUT_CHARS_PER_TEST)
+            if r["stderr"]
+            else ""
+        )
+
+        block = f"### {r['name']}\n"
+        block += f"Exit code: {r['exit_code']}\n"
+        block += f"Elapsed: {r['elapsed']:.1f}s\n"
+        block += f"\n--- stdout ---\n{stdout}\n"
+        if stderr:
+            block += f"\n--- stderr ---\n{stderr}\n"
+        test_blocks.append(block)
+
+    test_output_section = "\n".join(test_blocks)
+
+    return f"""You are a test result classifier. Below are the outputs from {len(results)} API feature test scripts. Each test validates a specific Claude API feature on Amazon Bedrock or the Anthropic API.
+
+Your job is to read each test's output carefully and classify it.
+
+## Classification Rules
+
+- **PASS**: The test ran successfully and the feature works as expected. Look for "PASS" verdicts, successful API responses, correct behavior, and exit code 0.
+- **FAIL**: The test ran to completion but the feature did not work as expected. This includes:
+  - Tests that print "FAIL" verdicts
+  - Features that are "not supported" or "not currently supported" on Bedrock (this is a feature availability failure, not an infrastructure error)
+  - API validation errors indicating the feature is not available (e.g., "The provided request is not valid", "does not match any of the expected tags")
+  - Tests where expected behavior was not observed
+- **ERROR**: The test could not execute properly due to infrastructure issues. This includes:
+  - Timeouts (process killed)
+  - Authentication failures
+  - Network errors
+  - Python crashes / unhandled exceptions unrelated to the feature under test
+  - Import errors
+
+Important: If the API returns an error saying a feature is "not supported" or "not available", that is a FAIL (feature doesn't work), NOT an ERROR (infrastructure problem). ERROR is reserved for cases where the test itself couldn't run.
+
+## Notes Guidelines
+
+Write a concise (max 100 chars) summary of what happened. For PASS results, briefly describe what was verified. For FAIL results, explain what didn't work. For ERROR results, explain what went wrong with execution.
+
+## Errors Guidelines
+
+For FAIL and ERROR results, include the key error message or reason. Leave empty for PASS results.
+
+## Test Outputs
+
+{test_output_section}
+
+## Response Format
+
+Respond with ONLY a JSON array. No other text before or after. Each element must have exactly these fields:
+- "test": the test filename (string)
+- "status": "PASS", "FAIL", or "ERROR" (string)
+- "notes": concise description of what happened (string, max 100 chars)
+- "errors": key error message for FAIL/ERROR, empty string for PASS (string)
+
+Example:
+[
+  {{"test": "example_test.py", "status": "PASS", "notes": "Feature X works correctly, 3 sub-tests passed", "errors": ""}},
+  {{"test": "another_test.py", "status": "FAIL", "notes": "Feature Y not supported on Bedrock", "errors": "ValidationException: not currently supported"}}
+]"""
+
+
+def llm_classify(results: list[dict], config: dict) -> list[dict] | None:
+    """Send test outputs to Claude via Bedrock for classification.
+
+    Returns a list of dicts with keys: test, status, notes, errors.
+    Returns None if the API call fails.
+    """
+    try:
+        client = get_bedrock_client(config)
+        model_id = config["bedrock_model_id"]
+        prompt = build_llm_prompt(results)
+
+        body = {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 8192,
+            "temperature": 0,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+
+        response = client.invoke_model(modelId=model_id, body=json.dumps(body))
+        response_body = json.loads(response["body"].read())
+
+        # Extract text content from response
+        text = ""
+        for block in response_body.get("content", []):
+            if block.get("type") == "text":
+                text += block["text"]
+
+        # Parse JSON from response — strip markdown fences if present
+        text = text.strip()
+        if text.startswith("See `AGENTS_PRIVATE.md` for remote URLs and push instructions."):
+            # Remove opening fence (See `AGENTS_PRIVATE.md` for remote URLs and push instructions.json or See `AGENTS_PRIVATE.md` for remote URLs and push instructions.)
+            first_newline = text.index("\n")
+            text = text[first_newline + 1 :]
+            # Remove closing fence
+            if text.rstrip().endswith("See `AGENTS_PRIVATE.md` for remote URLs and push instructions."):
+                text = text.rstrip()[:-3].rstrip()
+
+        classifications = json.loads(text)
+
+        # Validate structure
+        if not isinstance(classifications, list):
+            print("  WARNING: LLM returned non-list JSON, falling back to regex")
+            return None
+
+        for item in classifications:
+            if not all(k in item for k in ("test", "status", "notes", "errors")):
+                print("  WARNING: LLM returned malformed item, falling back to regex")
+                return None
+            if item["status"] not in ("PASS", "FAIL", "ERROR"):
+                print(
+                    f"  WARNING: LLM returned invalid status '{item['status']}', falling back to regex"
+                )
+                return None
+
+        return classifications
+
+    except json.JSONDecodeError as e:
+        print(f"  WARNING: Failed to parse LLM JSON response: {e}")
+        return None
+    except Exception as e:
+        print(f"  WARNING: LLM classification failed: {type(e).__name__}: {e}")
+        return None
+
+
+def apply_llm_classifications(results: list[dict], classifications: list[dict]):
+    """Update results list with LLM classifications.
+
+    Matches by test filename. If a test is missing from the LLM output,
+    its regex-based classification is kept.
+    """
+    llm_map = {c["test"]: c for c in classifications}
+
+    for r in results:
+        if r["name"] in llm_map:
+            c = llm_map[r["name"]]
+            r["status"] = c["status"]
+            r["notes"] = c["notes"]
+            r["error_detail"] = c["errors"]
+
+
 def generate_report(
-    results: list[dict], config: dict, suite: str, verbose: bool
+    results: list[dict],
+    config: dict,
+    suite: str,
+    verbose: bool,
+    classifier: str = "regex",
 ) -> str:
     """Generate a markdown report from test results."""
     lines = []
@@ -174,6 +348,7 @@ def generate_report(
     lines.append(f"**Region:** {config['region']}")
     lines.append(f"**Bedrock Model:** {config['bedrock_model_id']}")
     lines.append(f"**Anthropic Model:** {config.get('anthropic_model_id', 'N/A')}")
+    lines.append(f"**Classifier:** {classifier}")
     lines.append("")
 
     # Results table
@@ -257,6 +432,11 @@ def main():
         action="store_true",
         help="Include full raw output from each test in the report",
     )
+    parser.add_argument(
+        "--no-llm",
+        action="store_true",
+        help="Skip LLM classification; use only regex-based heuristics",
+    )
     args = parser.parse_args()
 
     config = load_config()
@@ -274,7 +454,7 @@ def main():
     print(f"Running {total} {args.suite} tests...")
     print()
 
-    # Run tests sequentially, print status as each completes
+    # Phase 1: Run tests sequentially, print live status using regex classifier
     results = []
     name_width = max(len(t.name) for t in tests)
 
@@ -288,7 +468,7 @@ def main():
             line += "  (timeout)"
         print(line)
 
-    # Print summary line
+    # Print interim summary from regex classification
     passes = sum(1 for r in results if r["status"] == "PASS")
     fails = sum(1 for r in results if r["status"] == "FAIL")
     errors = sum(1 for r in results if r["status"] == "ERROR")
@@ -302,8 +482,27 @@ def main():
     )
     print("=" * 60)
 
-    # Generate report
-    report = generate_report(results, config, args.suite, args.verbose)
+    # Phase 2: LLM classification (unless --no-llm)
+    classifier = "regex"
+    if not args.no_llm:
+        print()
+        print("Classifying results with Claude...")
+        classifications = llm_classify(results, config)
+        if classifications:
+            apply_llm_classifications(results, classifications)
+            classifier = "llm"
+
+            # Recount after LLM classification
+            passes = sum(1 for r in results if r["status"] == "PASS")
+            fails = sum(1 for r in results if r["status"] == "FAIL")
+            errors = sum(1 for r in results if r["status"] == "ERROR")
+
+            print(f"  Done — {passes} PASS, {fails} FAIL, {errors} ERROR")
+        else:
+            print("  Falling back to regex classification")
+
+    # Phase 3: Generate report
+    report = generate_report(results, config, args.suite, args.verbose, classifier)
 
     # Save to file if requested
     if args.output:
@@ -321,8 +520,7 @@ def main():
         output_path.write_text(report)
         print(f"\nReport written to: {output_path}")
 
-    # Print full report if saving to file (user can review both)
-    # If not saving, print the report to stdout
+    # Print full report if not saving to file
     if not args.output:
         print()
         print(report)

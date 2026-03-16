@@ -1,6 +1,7 @@
 # ABOUTME: Tests 1M context window support on Bedrock via the invoke_model API.
 # ABOUTME: Sends ~205K tokens from input_205000.txt and validates a successful response.
 
+import copy
 import json
 import os
 import sys
@@ -59,20 +60,38 @@ def test_1m_context(client, model_id):
     if use_beta:
         body["anthropic_beta"] = ["context-1m-2025-08-07"]
 
+    # Print request body with large document replaced for readability
+    display_body = copy.deepcopy(body)
+    display_body["messages"][0]["content"][0]["text"] = (
+        PROMPT_PREFIX + "[LARGE_DOCUMENT]"
+    )
+    print("\n--- REQUEST BODY ---")
+    print(json.dumps(display_body, indent=2))
+
     try:
         response = client.invoke_model(modelId=model_id, body=json.dumps(body))
         result = json.loads(response["body"].read())
     except Exception as e:
+        print(f"\n--- ERROR ---")
+        print(f"{type(e).__name__}: {e}")
         return ("ERROR", f"{type(e).__name__}: {e}")
 
     stop_reason = result.get("stop_reason")
     usage = result.get("usage", {})
     text = result.get("content", [{}])[0].get("text", "")
 
-    print(f"  stop_reason: {stop_reason}")
-    print(f"  input_tokens: {usage.get('input_tokens', 0)}")
-    print(f"  output_tokens: {usage.get('output_tokens', 0)}")
-    print(f"  response (first 200 chars): {text[:200]}")
+    # Print relevant response fields
+    print("\n--- RESPONSE ---")
+    print(
+        json.dumps(
+            {
+                "stop_reason": stop_reason,
+                "usage": usage,
+                "content_preview": text[:200],
+            },
+            indent=2,
+        )
+    )
 
     if stop_reason != "end_turn":
         return ("FAIL", f"unexpected stop_reason: {stop_reason}")

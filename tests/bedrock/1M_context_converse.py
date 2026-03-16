@@ -1,6 +1,8 @@
 # ABOUTME: Tests 1M context window support on Bedrock via the Converse API.
 # ABOUTME: Sends ~205K tokens from input_205000.txt and validates a successful response.
 
+import copy
+import json
 import os
 import sys
 
@@ -18,10 +20,9 @@ FILES_DIR = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "files"
 )
 
-PROMPT_TEMPLATE = (
-    "<context>\n{content}\n</context>\n\n"
-    "How many times do you see the phrase 'technical expert' in the context? "
-    "Hint: it should be close to the name 'Richard Harris'."
+PROMPT_PREFIX = (
+    "Provide a numbered list of Darwin's main arguments about "
+    "natural selection, without further explanation: "
 )
 
 # Models that still require the beta header for 1M context.
@@ -46,32 +47,52 @@ def test_1m_context(client, model_id):
     with open(input_path, "r", encoding="utf-8") as f:
         large_document = f.read()
 
-    prompt = PROMPT_TEMPLATE.format(content=large_document)
+    prompt = PROMPT_PREFIX + large_document
 
     additional_fields = {}
     if use_beta:
         additional_fields["anthropic_beta"] = ["context-1m-2025-08-07"]
 
+    kwargs = {
+        "modelId": model_id,
+        "messages": [{"role": "user", "content": [{"text": prompt}]}],
+        "inferenceConfig": {"maxTokens": 4000, "temperature": 0.1},
+    }
+    if additional_fields:
+        kwargs["additionalModelRequestFields"] = additional_fields
+
+    # Print request params with large document replaced for readability
+    display_kwargs = copy.deepcopy(kwargs)
+    display_kwargs["messages"][0]["content"][0]["text"] = (
+        PROMPT_PREFIX + "[LARGE_DOCUMENT]"
+    )
+    print("\n--- REQUEST PARAMS ---")
+    print(json.dumps(display_kwargs, indent=2))
+
     try:
-        kwargs = {
-            "modelId": model_id,
-            "messages": [{"role": "user", "content": [{"text": prompt}]}],
-            "inferenceConfig": {"maxTokens": 4000, "temperature": 0.1},
-        }
-        if additional_fields:
-            kwargs["additionalModelRequestFields"] = additional_fields
         response = client.converse(**kwargs)
     except Exception as e:
+        print(f"\n--- ERROR ---")
+        print(f"{type(e).__name__}: {e}")
         return ("ERROR", f"{type(e).__name__}: {e}")
 
     stop_reason = response.get("stopReason")
     usage = response.get("usage", {})
     text = response["output"]["message"]["content"][0]["text"]
 
-    print(f"  stopReason: {stop_reason}")
-    print(f"  inputTokens: {usage.get('inputTokens', 0)}")
-    print(f"  outputTokens: {usage.get('outputTokens', 0)}")
-    print(f"  response (first 200 chars): {text[:200]}")
+    # Print relevant response fields
+    print("\n--- RESPONSE ---")
+    print(
+        json.dumps(
+            {
+                "stopReason": stop_reason,
+                "usage": usage,
+                "content_preview": text[:200],
+            },
+            indent=2,
+            default=str,
+        )
+    )
 
     if stop_reason != "end_turn":
         return ("FAIL", f"unexpected stopReason: {stop_reason}")

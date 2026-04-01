@@ -59,6 +59,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 |------|---------|
 | `adaptive_thinking_invoke.py` | Extended thinking with effort levels (invoke_model) |
 | `adaptive_thinking_converse.py` | Extended thinking with effort levels (Converse) |
+| `automatic_caching_invoke.py` | Automatic prompt caching with top-level cache_control (invoke_model) |
+| `automatic_caching_converse.py` | Automatic prompt caching with top-level cache_control (Converse) |
 | `bash_tool_invoke.py` | Bash tool (invoke_model) |
 | `bash_tool_converse.py` | Bash tool (Converse) |
 | `text_editor_invoke.py` | Text editor tool (invoke_model) |
@@ -67,6 +69,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `cache_with_structured_outputs.py` | Caching interaction with structured JSON output |
 | `extended_cache_ttl_invoke.py` | Extended 1-hour cache TTL (invoke_model) |
 | `extended_cache_ttl_converse.py` | Extended 1-hour cache TTL (Converse) |
+| `fine_grained_tool_streaming_invoke.py` | Fine-grained tool streaming with eager_input_streaming (invoke_model) |
+| `fine_grained_tool_streaming_converse.py` | Fine-grained tool streaming with eager_input_streaming (Converse) |
 | `structured_outputs_invoke.py` | JSON schema output + strict tool use (invoke_model) |
 | `structured_outputs_converse.py` | JSON schema output + strict tool use (Converse) |
 | `count_tokens.py` | count_tokens API |

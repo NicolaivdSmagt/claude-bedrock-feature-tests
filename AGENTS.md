@@ -50,6 +50,10 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 
 No ruff, flake8, mypy, black, etc. Follow the conventions documented below.
 
+### Git Push
+
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+
 ## Configuration
 
 All test scripts read from `config.yaml` in the project root via `load_config.py`.

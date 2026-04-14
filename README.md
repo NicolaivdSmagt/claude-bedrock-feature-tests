@@ -6,7 +6,7 @@ An automated test runner executes all tests via subprocess, then uses Claude (vi
 
 ## Quick Start
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.bash
+```bash
 # Install dependencies
 uv sync
 
@@ -16,7 +16,7 @@ vim config.yaml
 # Run all Bedrock tests
 export AWS_PROFILE=work
 uv run python run_tests.py --suite bedrock
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 The report is saved to `reports/report_<model>_<region>_<timestamp>.md`.
 
@@ -24,20 +24,20 @@ The report is saved to `reports/report_<model>_<region>_<timestamp>.md`.
 
 All test scripts read from `config.yaml`:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.yaml
+```yaml
 aws_profile: "work"
 region: "eu-west-1"
 bedrock_model_id: "global.anthropic.claude-sonnet-4-6"
 anthropic_model_id: "claude-sonnet-4-6"
 secrets_manager_region: "eu-west-1"
 secrets_manager_secret_name: "anthropic_api_key"
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 To test a different model, change `bedrock_model_id` and/or `anthropic_model_id` and rerun.
 
 ## Directory Structure
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 .
 ├── config.yaml              # Centralized configuration
 ├── load_config.py           # Shared config loader + client helpers
@@ -49,7 +49,7 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 ├── files/                   # Test assets (images, PDFs, large text files)
 ├── support/                 # Helper scripts for generating test data
 └── reports/                 # Generated test reports (gitignored)
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ## Test Suites
 
@@ -128,7 +128,7 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 
 The test runner executes all tests via subprocess, printing live status as each completes. After all tests finish, it sends the captured output to Claude (via Bedrock) for accurate classification and report generation:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.bash
+```bash
 # Bedrock tests only (default)
 uv run python run_tests.py
 
@@ -149,7 +149,7 @@ uv run python run_tests.py -v
 
 # Skip LLM classification (use regex-based heuristics only)
 uv run python run_tests.py --no-llm
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 Environment variables:
 - `AWS_PROFILE` - AWS credentials profile
@@ -158,11 +158,11 @@ Environment variables:
 
 Each test is a standalone script:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.bash
+```bash
 export AWS_PROFILE=work
 uv run python tests/bedrock/adaptive_thinking_invoke.py
 uv run python tests/anthropic/caching_min_prefix.py
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ## Prerequisites
 
@@ -187,10 +187,10 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 
 1. Create a new `.py` file in `tests/bedrock/` or `tests/anthropic/`
 2. Import config via:
-   See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+   ```python
    import os, sys
    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
    from load_config import load_config, get_bedrock_client
-   See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+   ```
 3. Use `config["bedrock_model_id"]` and `config["region"]` instead of hardcoded values
 4. The test runner will automatically discover and run the new test

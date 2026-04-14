@@ -38,6 +38,9 @@ memories/
 reports/
 .claude/
 
+# Private config
+AGENTS_PRIVATE.md
+
 # Backup files
 *.bkp
 *.bak

@@ -52,14 +52,7 @@ No ruff, flake8, mypy, black, etc. Follow the conventions documented below.
 
 ### Git Push
 
-This repo has two remotes: `origin` (GitHub) and `gitlab` (AWS GitLab).
-Always push to both. The GitHub remote requires `--no-verify` to bypass
-Code Defender:
-
-```bash
-git push --no-verify origin main
-git push gitlab main
-```
+See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 
 ## Configuration
 

@@ -48,10 +48,11 @@ agent/.claude/skills/claude-api/
 # Agent runtime artifacts
 agent/run_agent.log
 
-# Terraform state
+# Terraform state and local variables
 agent/infra/.terraform/
 agent/infra/.terraform.lock.hcl
 agent/infra/terraform.tfstate*
+agent/infra/terraform.tfvars
 
 # Private config
 AGENTS_PRIVATE.md

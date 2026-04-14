@@ -44,8 +44,10 @@ Both modes send a report via AWS SNS. Configure in `../config.yaml`:
 Use the Terraform in `infra/` to create the topic:
 ```bash
 cd agent/infra
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your region, profile, and email
 terraform init
-terraform apply -var="notification_email=you@example.com"
+terraform apply
 ```
 Copy the output `sns_topic_arn` to `config.yaml`. Confirm the email
 subscription via the link AWS sends.

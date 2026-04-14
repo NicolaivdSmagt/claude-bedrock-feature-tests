@@ -1,0 +1,9 @@
+# ABOUTME: Example Terraform variables for the SNS notification topic.
+# ABOUTME: Copy to terraform.tfvars and fill in your values.
+
+# Copy this file:
+#   cp terraform.tfvars.example terraform.tfvars
+
+aws_region         = "us-east-1"
+aws_profile        = "default"
+notification_email = "you@example.com"

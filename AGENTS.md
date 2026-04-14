@@ -50,6 +50,17 @@ uv run python tests/anthropic/caching_min_prefix.py
 
 No ruff, flake8, mypy, black, etc. Follow the conventions documented below.
 
+### Git Push
+
+This repo has two remotes: `origin` (GitHub) and `gitlab` (AWS GitLab).
+Always push to both. The GitHub remote requires `--no-verify` to bypass
+Code Defender:
+
+```bash
+git push --no-verify origin main
+git push gitlab main
+```
+
 ## Configuration
 
 All test scripts read from `config.yaml` in the project root via `load_config.py`.

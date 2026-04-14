@@ -25,7 +25,7 @@ and produce a markdown report.
 **Prerequisites:** Python 3.10+, [uv](https://docs.astral.sh/uv/) (no pip/poetry),
 AWS credentials (`AWS_PROFILE=work`), Anthropic API key in AWS Secrets Manager.
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.bash
+```bash
 uv sync                                                  # Install dependencies
 
 export AWS_PROFILE=work CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=eu-west-1
@@ -36,15 +36,15 @@ uv run python run_tests.py --timeout 600                  # Custom timeout per t
 uv run python run_tests.py -v                             # Include full test output
 uv run python run_tests.py -o auto                        # Save report to reports/
 uv run python run_tests.py -o results.md                  # Save report to specific file
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ### Run a single test
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.bash
+```bash
 export AWS_PROFILE=work
 uv run python tests/bedrock/adaptive_thinking_invoke.py
 uv run python tests/anthropic/caching_min_prefix.py
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ### No formal lint/format/typecheck tooling
 
@@ -52,19 +52,19 @@ No ruff, flake8, mypy, black, etc. Follow the conventions documented below.
 
 ### Git Push
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+See `AGENTS_PRIVATE.md` (gitignored) for remote URLs and push instructions.
 
 ## Configuration
 
 All test scripts read from `config.yaml` in the project root via `load_config.py`.
 Never hardcode model IDs, regions, or AWS profiles — always use config values:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+```python
 from load_config import load_config, get_bedrock_client, get_anthropic_client
 config = load_config()
 model_id = config["bedrock_model_id"]
 client = get_bedrock_client(config)
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 Key config fields: `aws_profile`, `region`, `bedrock_model_id`,
 `anthropic_model_id`, `secrets_manager_region`, `secrets_manager_secret_name`.
@@ -100,12 +100,12 @@ generics (`list[Path]`, `dict`). Follow surrounding code.
 
 Use f-strings consistently. Multi-line strings use parenthesized concatenation:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+```python
 PROMPT = (
     "First part of the prompt "
     "second part continues here."
 )
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ### Error Handling
 
@@ -142,7 +142,7 @@ where status is `"PASS"`, `"FAIL"`, or `"ERROR"` and error_msg is `None` on
 success or a descriptive string otherwise. `main()` collects these into a
 results list and calls a `print_summary()` function:
 
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+```python
 def print_summary(results):
     print("=" * 70)
     print("  SUMMARY")
@@ -159,7 +159,7 @@ def print_summary(results):
     print(f"\n  Results: {passes} PASS, {fails} FAIL, {errors} ERROR")
     print("=" * 70)
     return all(s == "PASS" for _, s, _ in results)
-See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+```
 
 ### Multi-Test Scripts
 
@@ -195,26 +195,26 @@ The Converse API has several structural differences from invoke_model:
 - **Placeholder toolSpec**: When using Anthropic-specific tools (memory,
   code execution, etc.) via `additionalModelRequestFields`, Converse still
   requires at least one `toolSpec` in `toolConfig.tools`:
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+  ```python
   PLACEHOLDER_TOOL_CONFIG = {
       "tools": [{"toolSpec": {"name": "placeholder",
                               "inputSchema": {"json": {"type": "object"}}}}]
   }
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+  ```
 
 - **Beta headers and tool definitions** go in `additionalModelRequestFields`:
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+  ```python
   additionalModelRequestFields={
       "anthropic_beta": ["context-management-2025-06-27"],
       "tools": [{"type": "memory_20250818", "name": "memory"}],
   }
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+  ```
 
 - **Cache points** use `cachePoint` as a separate content block (not inline
   like invoke's `cache_control`):
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.python
+  ```python
   system=[{"text": content}, {"cachePoint": {"type": "default", "ttl": "1h"}}]
-  See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
+  ```
 
 - **camelCase keys** throughout: `inputTokens`, `outputTokens`,
   `cacheWriteInputTokens`, `cacheReadInputTokens`, `stopReason`, `toolUseId`,

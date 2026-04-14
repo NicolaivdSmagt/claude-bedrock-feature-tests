@@ -59,6 +59,8 @@ See `AGENTS_PRIVATE.md` for remote URLs and push instructions.
 |------|---------|
 | `adaptive_thinking_invoke.py` | Extended thinking with effort levels (invoke_model) |
 | `adaptive_thinking_converse.py` | Extended thinking with effort levels (Converse) |
+| `advisor_tool_invoke.py` | Advisor tool: executor consults advisor model (invoke_model) |
+| `advisor_tool_converse.py` | Advisor tool: executor consults advisor model (Converse) |
 | `automatic_caching_invoke.py` | Automatic prompt caching with top-level cache_control (invoke_model) |
 | `automatic_caching_converse.py` | Automatic prompt caching with top-level cache_control (Converse) |
 | `bash_tool_invoke.py` | Bash tool (invoke_model) |

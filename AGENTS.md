@@ -280,3 +280,8 @@ threshold.
 6. The automated runner discovers tests via `tests/<suite>/*.py` glob
 7. Exit with code 0 on success, non-zero on failure
 8. Add the test to the appropriate table in `README.md` (Bedrock or Anthropic)
+9. **Always run new test scripts after writing them** to verify they execute
+   correctly, produce proper output, and classify results as expected. Fix
+   any issues through incremental test-and-fix cycles before considering
+   the work complete. Do not submit test scripts that have not been executed
+   at least once.

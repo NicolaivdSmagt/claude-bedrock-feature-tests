@@ -158,7 +158,7 @@ def test_memory_create_and_recall(client, model_id):
             client,
             model_id,
             (
-                "Hi! My name is Nicolai. I'm a software engineer who loves Python and AWS. "
+                "Hi! My name is Alex. I'm a software engineer who loves Python and AWS. "
                 "I prefer clean, maintainable code over clever solutions. "
                 "I use uv for Python package management. "
                 "Please remember these preferences."

@@ -10,11 +10,12 @@ An automated test runner executes all tests via subprocess, then uses Claude (vi
 # Install dependencies
 uv sync
 
-# Configure (edit config.yaml with your region, model, and profile)
+# Configure (copy example and edit with your region, model, and profile)
+cp config.yaml.example config.yaml
 vim config.yaml
 
 # Run all Bedrock tests
-export AWS_PROFILE=work
+export AWS_PROFILE=your-profile
 uv run python run_tests.py --suite bedrock
 ```
 
@@ -22,14 +23,14 @@ The report is saved to `reports/report_<model>_<region>_<timestamp>.md`.
 
 ## Configuration
 
-All test scripts read from `config.yaml`:
+All test scripts read from `config.yaml` (copy from `config.yaml.example`):
 
 ```yaml
-aws_profile: "work"
-region: "eu-west-1"
+aws_profile: "default"
+region: "us-east-1"
 bedrock_model_id: "global.anthropic.claude-sonnet-4-6"
 anthropic_model_id: "claude-sonnet-4-6"
-secrets_manager_region: "eu-west-1"
+secrets_manager_region: "us-east-1"
 secrets_manager_secret_name: "anthropic_api_key"
 ```
 
@@ -39,7 +40,7 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 
 ```
 .
-├── config.yaml              # Centralized configuration
+├── config.yaml.example      # Configuration template (copy to config.yaml)
 ├── load_config.py           # Shared config loader + client helpers
 ├── run_tests.py             # Automated test runner (subprocess + LLM classification)
 ├── tests/
@@ -61,12 +62,16 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `adaptive_thinking_converse.py` | Extended thinking with effort levels (Converse) |
 | `advisor_tool_invoke.py` | Advisor tool: executor consults advisor model (invoke_model) |
 | `advisor_tool_converse.py` | Advisor tool: executor consults advisor model (Converse) |
+| `agent_skills_invoke.py` | Agent Skills: pre-built Anthropic skills (invoke_model) |
+| `agent_skills_converse.py` | Agent Skills: pre-built Anthropic skills (Converse) |
 | `automatic_caching_invoke.py` | Automatic prompt caching with top-level cache_control (invoke_model) |
 | `automatic_caching_converse.py` | Automatic prompt caching with top-level cache_control (Converse) |
 | `bash_tool_invoke.py` | Bash tool (invoke_model) |
 | `bash_tool_converse.py` | Bash tool (Converse) |
 | `text_editor_invoke.py` | Text editor tool (invoke_model) |
 | `text_editor_converse.py` | Text editor tool (Converse) |
+| `programmatic_tool_calling_invoke.py` | Programmatic tool calling with code_execution_20260120 (invoke_model) |
+| `programmatic_tool_calling_converse.py` | Programmatic tool calling with code_execution_20260120 (Converse) |
 | `caching_min_prefix.py` | Minimum prefix size for prompt caching (~2048 tokens) |
 | `cache_with_structured_outputs.py` | Caching interaction with structured JSON output |
 | `extended_cache_ttl_invoke.py` | Extended 1-hour cache TTL (invoke_model) |
@@ -82,6 +87,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `tool_search_converse.py` | Tool search: regex, BM25, custom client-side (Converse) |
 | `web_search_invoke.py` | Web search (invoke_model) |
 | `web_search_converse.py` | Web search (Converse) |
+| `web_fetch_invoke.py` | Web fetch: retrieve full content from URLs (invoke_model) |
+| `web_fetch_converse.py` | Web fetch: retrieve full content from URLs (Converse) |
 | `parallel_tool_use_invoke.py` | Parallel tool calls in a single response (invoke_model) |
 | `parallel_tool_use_converse.py` | Parallel tool calls in a single response (Converse) |
 | `clear_thinking_invoke.py` | Clear old thinking blocks to save tokens (invoke_model) |
@@ -103,6 +110,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `1M_context_invoke.py` | 1M context window (invoke_model) |
 | `1M_context_converse.py` | 1M context window (Converse) |
 | `magic_strings.py` | Redacted thinking + streaming refusal magic string behavior |
+| `thinking_display_omitted_invoke.py` | Thinking with display: omitted for faster streaming (invoke_model) |
+| `thinking_display_omitted_converse.py` | Thinking with display: omitted for faster streaming (Converse) |
 
 ### Anthropic API Tests (`tests/anthropic/`)
 
@@ -159,7 +168,7 @@ Environment variables:
 Each test is a standalone script:
 
 ```bash
-export AWS_PROFILE=work
+export AWS_PROFILE=your-profile
 uv run python tests/bedrock/adaptive_thinking_invoke.py
 uv run python tests/anthropic/caching_min_prefix.py
 ```

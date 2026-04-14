@@ -1,0 +1,11 @@
+# ABOUTME: Example crontab entries for the Anthropic Feature Scout Agent.
+# ABOUTME: Daily scout at 9:00 CEST (7:00 UTC), weekly audit on Mondays at 9:00 CEST.
+
+# Install with: crontab -e
+# Then paste the lines below (adjust paths as needed).
+
+# Daily 9:00 CEST (7:00 UTC) — search for new Claude API features
+0 7 * * * cd /path/to/functional_tests && AWS_PROFILE=your-profile CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=eu-west-1 uv run python agent/run_agent.py --mode daily >> agent/run_agent.log 2>&1
+
+# Weekly Monday 9:00 CEST (7:00 UTC) — full API audit with latest docs
+0 7 * * 1 cd /path/to/functional_tests && AWS_PROFILE=your-profile CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=eu-west-1 uv run python agent/run_agent.py --mode weekly >> agent/run_agent.log 2>&1

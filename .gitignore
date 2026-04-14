@@ -38,8 +38,24 @@ memories/
 reports/
 .claude/
 
+# Agent skills: track bedrock-test-writer, ignore claude-api (refreshed from GitHub)
+!agent/.claude/
+!agent/.claude/skills/
+!agent/.claude/skills/bedrock-test-writer/
+!agent/.claude/skills/bedrock-test-writer/**
+agent/.claude/skills/claude-api/
+
+# Agent runtime artifacts
+agent/run_agent.log
+
+# Terraform state
+agent/infra/.terraform/
+agent/infra/.terraform.lock.hcl
+agent/infra/terraform.tfstate*
+
 # Private config
 AGENTS_PRIVATE.md
+config.yaml
 
 # Backup files
 *.bkp

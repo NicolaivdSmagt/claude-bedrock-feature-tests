@@ -112,6 +112,15 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `magic_strings.py` | Redacted thinking + streaming refusal magic string behavior |
 | `thinking_display_omitted_invoke.py` | Thinking with display: omitted for faster streaming (invoke_model) |
 | `thinking_display_omitted_converse.py` | Thinking with display: omitted for faster streaming (Converse) |
+| `task_budgets_invoke.py` | Task budgets (beta) — token spending limits for agentic turns (invoke_model) |
+| `task_budgets_converse.py` | Task budgets (beta) — token spending limits for agentic turns (Converse) |
+| `hi_res_vision_invoke.py` | Opus 4.7 hi-res vision — images up to 2576px, token usage comparison (invoke_model) |
+| `hi_res_vision_converse.py` | Opus 4.7 hi-res vision — images up to 2576px, token usage comparison (Converse) |
+| `opus_47_sampling_params_invoke.py` | Opus 4.7 deprecation of `temperature`/`top_p`/`top_k` (invoke_model) |
+| `opus_47_sampling_params_converse.py` | Opus 4.7 deprecation of `temperature`/`top_p`/`top_k` (Converse) |
+| `opus_47_effort_placement_invoke.py` | Opus 4.7 — `effort` must be in `output_config`, not `thinking` (invoke_model) |
+| `opus_47_effort_placement_converse.py` | Opus 4.7 — `effort` must be in `output_config`, not `thinking` (Converse) |
+| `messages_api_mantle.py` | Messages API via Bedrock Mantle (AnthropicBedrockMantle client) |
 
 ### Anthropic API Tests (`tests/anthropic/`)
 

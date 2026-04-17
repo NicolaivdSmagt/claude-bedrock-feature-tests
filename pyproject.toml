@@ -5,7 +5,7 @@ description = "Standalone test scripts for validating Claude API features on Ama
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "anthropic>=0.74.1",
+    "anthropic[bedrock]>=0.74.1",
     "boto3>=1.41.1",
     "claude-agent-sdk>=0.1.50",
     "pillow>=12.1.1",

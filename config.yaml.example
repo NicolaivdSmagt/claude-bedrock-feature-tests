@@ -11,7 +11,23 @@ aws_profile: "default"
 region: "us-east-1"
 
 # Bedrock model ID (used by invoke_model / converse API)
+# Available IDs include:
+#   global.anthropic.claude-opus-4-7
+#   us.anthropic.claude-opus-4-7
+#   eu.anthropic.claude-opus-4-7
+#   global.anthropic.claude-sonnet-4-6
+#   global.anthropic.claude-opus-4-6-v1
+#   global.anthropic.claude-haiku-4-5-20251001-v1:0
 bedrock_model_id: "global.anthropic.claude-sonnet-4-6"
+
+# Bedrock Mantle model ID — bare format, used with AnthropicBedrockMantle client
+# (e.g. "anthropic.claude-opus-4-7"). This differs from the CRIS model IDs
+# (us.*, eu.*, global.*) used with InvokeModel / Converse on bedrock-runtime.
+bedrock_mantle_model_id: "anthropic.claude-opus-4-7"
+
+# Region for the Bedrock Mantle endpoint (Opus 4.7 launches in us-east-1
+# and us-west-2 only; eu regions do not serve Opus 4.7 at launch).
+mantle_region: "us-east-1"
 
 # Anthropic 1st-party API model ID
 anthropic_model_id: "claude-sonnet-4-6"

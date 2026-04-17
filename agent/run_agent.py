@@ -78,6 +78,64 @@ After all tests are written, run, and added to README.md, commit and push:
 If no new tests were created, skip the commit/push step.
 """
 
+# Context about Opus 4.7 and Bedrock Mantle — injected into every prompt
+# so the agent knows about the new inference path and breaking changes.
+OPUS_47_CONTEXT = """
+## Context: Opus 4.7 and Bedrock Mantle
+
+Claude Opus 4.7 (April 2026) is the first Anthropic model served on AWS's
+next-generation inference engine, **Bedrock Mantle**. This introduces a new
+API path alongside the existing InvokeModel and Converse APIs.
+
+### Three API paths for Opus 4.7
+
+1. **Messages API via Bedrock Mantle** (new)
+   - Endpoint: `https://bedrock-mantle.{region}.api.aws/anthropic/v1/messages`
+   - Python client: `from anthropic import AnthropicBedrockMantle`
+   - IAM action: `bedrock-mantle:CreateInference`
+   - Model IDs: bare format REQUIRED (e.g., `anthropic.claude-opus-4-7`).
+     CRIS IDs like `us.anthropic.claude-opus-4-7` return 404 on Mantle.
+   - Only available in `us-east-1` and `us-west-2` at launch
+   - Most feature-complete path (task budgets, compaction, etc.)
+
+2. **InvokeModel via bedrock-runtime** (existing, fully supported)
+   - Uses CRIS IDs: `us.anthropic.claude-opus-4-7`, `eu.anthropic.claude-opus-4-7`,
+     `global.anthropic.claude-opus-4-7`
+
+3. **Converse via bedrock-runtime** (existing, fully supported)
+   - Uses same CRIS IDs as InvokeModel
+   - Compaction and task budgets NOT supported on Converse during beta
+
+### Opus 4.7 breaking changes (vs 4.6)
+
+- **Sampling parameters deprecated**: `temperature`, `top_p`, `top_k` return
+  HTTP 400 if set to non-default values. Tests for this: `opus_47_sampling_params_*`.
+- **`budget_tokens` removed**: Extended thinking with `budget_tokens` is no
+  longer supported. Must use `thinking.type: "adaptive"` with `effort` in
+  `output_config`.
+- **Effort placement**: `effort` goes in `output_config`, NOT in `thinking`
+  dict. Tests for this: `opus_47_effort_placement_*`.
+
+### Opus 4.7 new features
+
+- **Task Budgets (beta)**: `anthropic-beta: task-budgets-2026-03-13`,
+  `output_config.task_budget = {"type": "tokens", "total": N}`. Minimum 20K
+  tokens. Not supported on Converse during beta. Tests: `task_budgets_*`.
+- **Hi-res vision**: Images up to 2576px (was 1568px). No API changes needed.
+  ~3x more image tokens. Tests: `hi_res_vision_*`.
+- **1M context, no pricing jump above 200K** (change from 4.6).
+- **Max output: 128K tokens.**
+
+### Coming soon on Bedrock Mantle for Claude
+
+- Responses API (OpenAI-compatible) — `{endpoint}/v1/responses`
+- Chat Completions API (OpenAI-compatible) — `{endpoint}/v1/chat/completions`
+
+When writing new tests for Opus 4.7-specific features, hardcode the Opus 4.7
+model ID (`global.anthropic.claude-opus-4-7`) rather than reading from config,
+since the default config may still point at an older model.
+"""
+
 # Safety guardrails injected into every prompt
 SAFETY_RULES = """
 ## CRITICAL SAFETY RULES

@@ -91,6 +91,8 @@ To test a different model, change `bedrock_model_id` and/or `anthropic_model_id`
 | `web_fetch_converse.py` | Web fetch: retrieve full content from URLs (Converse) |
 | `parallel_tool_use_invoke.py` | Parallel tool calls in a single response (invoke_model) |
 | `parallel_tool_use_converse.py` | Parallel tool calls in a single response (Converse) |
+| `disable_parallel_tool_use_invoke.py` | `tool_choice.disable_parallel_tool_use` limits to one call (invoke_model) |
+| `disable_parallel_tool_use_converse.py` | `tool_choice.disable_parallel_tool_use` limits to one call (Converse) |
 | `clear_thinking_invoke.py` | Clear old thinking blocks to save tokens (invoke_model) |
 | `clear_thinking_converse.py` | Clear old thinking blocks to save tokens (Converse) |
 | `clear_tool_use_invoke.py` | Clear old tool use/result pairs (invoke_model) |
